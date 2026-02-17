@@ -319,6 +319,20 @@ If you want native ChatGPT remote connection from this repo, next step is adding
 - Merchant Center calls fail:
   Validate Merchant Center permissions and `MERCHANT_CENTER_ID`.
 
+## License
+
+This project is **source-available**, not OSI open-source.
+
+- License: `Google Ads MCP Sustainable Internal Use License (SIUL) v1.0`
+- See `LICENSE` for full terms.
+
+Key restrictions:
+
+- internal use only
+- no redistribution
+- no resale / sublicensing
+- no client installation, hosting, or managed deployment
+
 ## References
 
 - Anthropic MCP docs: https://docs.anthropic.com/en/docs/claude-code/mcp
