@@ -1,0 +1,35 @@
+services:
+  postgres:
+    image: postgres:17-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: google_ads_mcp
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d google_ads_mcp"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  mcp:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    depends_on:
+      postgres:
+        condition: service_healthy
+    env_file:
+      - .env
+    environment:
+      DATABASE_URL: postgresql://postgres:postgres@postgres:5432/google_ads_mcp?schema=public
+    stdin_open: true
+    tty: false
+    command: ["sh", "-c", "npx prisma migrate deploy && node dist/index.js"]
+
+volumes:
+  postgres_data:
