@@ -323,15 +323,14 @@ If you want native ChatGPT remote connection from this repo, next step is adding
 
 This project is **source-available**, not OSI open-source.
 
-- License: `Google Ads MCP Sustainable Internal Use License (SIUL) v1.0`
+- License: `Sustainable Use License (SUL) v1.0` (project-specific form in `LICENSE`)
 - See `LICENSE` for full terms.
 
 Key restrictions:
 
-- internal use only
-- no redistribution
-- no resale / sublicensing
-- no client installation, hosting, or managed deployment
+- use and modification are allowed for internal business use, personal use, and non-commercial use
+- redistribution is allowed only free of charge for non-commercial purposes
+- commercial redistribution / resale / sublicensing are not granted by this license
 
 ## References
 
