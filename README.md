@@ -1,340 +1,183 @@
 # Google Ads MCP
 
-Google Ads MCP is a local MCP server (stdio transport) that exposes a large Google Ads operations surface: reporting, campaign/ad group/keyword lifecycle, audiences, conversions, assets, Merchant Center, billing, recommendations, and broad v23 parity coverage.
+A **multi-tenant** Model Context Protocol server that exposes a large Google Ads
+operations surface (reporting, campaign/ad group/keyword/ad lifecycle, audiences,
+conversions, assets, Merchant Center, billing, recommendations, broad v23 parity)
+to AI agents — built for a **marketing agency with employees**, each scoped to the
+client accounts they're allowed to touch.
 
-It also includes an optional OAuth helper server for multi-user flows, plus 39 operational playbook skills under `skills/`.
+It runs as an HTTP service (Streamable HTTP MCP transport) behind authentication,
+or as a local stdio server for single-operator development.
 
-## What Is Implemented
+## Identity model
 
-- MCP server over stdio in `src/index.ts`.
-- PostgreSQL + Prisma persistence for users, refresh tokens, and account associations.
-- Multi-tenant access control hooks (RBAC gate before tool handlers).
-- OAuth helper server in `src/server/auth.ts` for account linking and account selection.
-- Broad tool coverage across Google Ads domains (core + advanced + parity families).
-- Dockerized local run (`Dockerfile`, `docker-compose.yml`) for Postgres + MCP.
-
-### Tool Families (High-Level)
-
-- Account and access: `list_accessible_accounts`, account-access helpers, admin status.
-- Core delivery objects: campaigns, ad groups, keywords, ads, assets.
-- Negatives and shared lists: ad group/campaign negatives and shared negative keyword lists.
-- Audience and measurement: user lists, custom/combined audiences, conversion actions, conversion goals, offline uploads, customer match.
-- Planning and optimization: keyword planner, recommendations, experiments, campaign drafts, bidding advanced.
-- Commerce and verticals: Merchant Center products and linking, Shopping/PMax reads, hotel/local-services/audience-insights reads.
-- Billing and compliance: invoices, account budgets, billing setups, policy findings, identity verification.
-- Bulk operations: batch jobs and large mutate families via v23 parity tooling.
-
-## Repository Layout
-
-- `src/index.ts`: main MCP server (stdio transport).
-- `src/server/auth.ts`: OAuth helper server (`/login`, `/oauth2callback`, user account selection endpoints).
-- `src/tools/`: tool handlers grouped by Google Ads domain.
-- `src/services/`: Google Ads clients, Merchant Center client, DB adapter.
-- `src/policies/rbac.ts`: account-level permission guard.
-- `prisma/schema.prisma`: DB schema.
-- `skills/`: operational playbooks (`SKILL.md` files).
-- `scripts/`: utility scripts (token generation, integration checks).
-
-## Prerequisites
-
-- Node.js 20+ recommended.
-- npm.
-- PostgreSQL (local or hosted).
-- Docker + Docker Compose plugin (optional, recommended for local stack).
-- Google Ads API credentials (developer token + OAuth client).
-
-## Environment Variables
-
-Copy `.env.example` to `.env` and fill values:
-
-```bash
-cp .env.example .env
+```
+Agency MCC (admin)  ->  Employee MCC (per employee)  ->  Client accounts
 ```
 
-Required:
+- The agency is an **Organization**; employees are **Members** with roles
+  (`owner`/`admin` = full, `member` = write, `viewer`/`analyst` = read-only).
+- Each employee links their own Google account, producing a **GoogleAdsConnection**
+  (their MCC + refresh token, **encrypted at rest**). The agency admin links the
+  agency MCC (parent of the employee MCCs).
+- An employee may operate on a client account only if they hold an **AccountGrant**
+  for it (with `READ`/`WRITE`/`ADMIN` level). No grant ⇒ hard error.
 
-- `DATABASE_URL`
-- `GOOGLE_ADS_CLIENT_ID`
-- `GOOGLE_ADS_CLIENT_SECRET`
-- `GOOGLE_ADS_DEVELOPER_TOKEN`
+Identity is resolved from the authenticated session (Better Auth) on every request
+and is **never** taken from tool arguments — a client cannot impersonate another
+tenant.
 
-Optional:
+## Security model
 
-- `GOOGLE_ADS_REFRESH_TOKEN` (single-user fallback mode)
-- `GOOGLE_ADS_LOGIN_CUSTOMER_ID`
-- `MERCHANT_CENTER_ID`
-- `LOG_LEVEL` (`debug|info|warn|error`, default `info`)
+- **AuthN**: Better Auth (email+password **and** Google social SSO). MCP clients
+  authenticate with a bearer token; web clients use cookies.
+- **AuthZ**: role gate (`can(authCtx, tool)`) + per-account `AccountGrant`; write
+  tools require a `WRITE`/`ADMIN` grant on the target account.
+- **Secrets at rest**: refresh tokens encrypted with AES-256-GCM, AAD-bound to
+  their connection row (a ciphertext can't be swapped across tenants) with key
+  rotation support (`TOKEN_ENCRYPTION_KEY` + `TOKEN_ENCRYPTION_KEY_PREVIOUS`).
+- **Email**: transactional verification / password-reset / org-invitation emails
+  via Resend, templated with React Email (`src/emails/`). Email verification is
+  required automatically once a provider is configured.
+- **Destructive guardrail**: `remove_*`/`delete_*`/`unlink_*`/`update_customer`/…
+  require `confirm: true`. A global `GOOGLE_ADS_VALIDATE_ONLY` dry-run switch also
+  exists.
+- **Audit**: every tool call by an authenticated org member is recorded
+  (who/what/when/outcome) in `AuditLog`; readable via the admin `GET /audit`.
 
-## Local Run (Node.js)
+## Repository layout
 
-1. Install dependencies:
+- `src/createServer.ts` — builds the MCP server (all tools + RBAC + guardrails + audit).
+- `src/index.ts` — stdio entry (local dev). `src/server/http.ts` — HTTP entry (prod).
+- `src/auth/betterAuth.ts` — Better Auth instance; `src/auth/identityContext.ts` — request identity (ALS).
+- `src/policies/` — `rbac.ts` (roles), `destructive.ts` (confirmation),
+  `resourceGuard.ts` (resourceName↔customer), `gaql.ts` (GAQL fragment guard).
+- `src/services/` — `db.ts` (repositories), `crypto.ts` (token encryption),
+  `email.ts` (Resend), Google Ads + Merchant Center clients.
+- `src/emails/` — React Email templates. `src/tools/` — tool handlers by domain.
+- `src/test/harness.ts` — unit-test helpers (captureTools/fakeCustomer).
+- `prisma/schema.prisma` — data model. `docs/REPLATFORM.md` — re-platform runbook.
+
+## Environment variables
+
+The HTTP server fails closed at startup (`assertHttpServerConfig`) if the required
+secrets are missing/invalid, so production never boots with a default key.
+
+| Var | Required | Notes |
+|-----|----------|-------|
+| `DATABASE_URL` | yes | PostgreSQL connection string |
+| `GOOGLE_ADS_CLIENT_ID` / `_SECRET` / `_DEVELOPER_TOKEN` | yes | Google Ads API + Google social login |
+| `TOKEN_ENCRYPTION_KEY` | yes (HTTP) | base64 that decodes to exactly 32 bytes — `openssl rand -base64 32` |
+| `TOKEN_ENCRYPTION_KEY_PREVIOUS` | optional | comma-separated old keys, decrypt-only (key rotation) |
+| `BETTER_AUTH_SECRET` | yes (HTTP) | ≥32 chars — `openssl rand -base64 32` |
+| `BETTER_AUTH_URL` | yes (HTTP) | public base URL (https in prod), e.g. `https://mcp.agency.com` |
+| `RESEND_API_KEY` | prod | Resend key; without it, verification/reset/invite emails are logged not sent |
+| `EMAIL_FROM` | prod | sender, e.g. `Google Ads MCP <no-reply@agency.com>` |
+| `EMAIL_VERIFICATION` | optional | `on`/`off`; defaults to on when a provider is configured |
+| `WEB_APP_ORIGIN` | optional | your web app origin (CORS) |
+| `TRUST_PROXY_HOPS` | optional | reverse-proxy hop count (default 1 = a single Caddy) |
+| `GOOGLE_ADS_REFRESH_TOKEN` / `GOOGLE_ADS_LOGIN_CUSTOMER_ID` | optional | single-operator stdio fallback |
+| `GOOGLE_ADS_VALIDATE_ONLY` | optional | global dry-run: all mutations run validate-only |
+| `MERCHANT_CENTER_ID`, `LOG_LEVEL` | optional | |
+
+Register `${BETTER_AUTH_URL}/api/auth/callback/google` as an authorized redirect
+URI in your Google Cloud OAuth client to enable Google social login.
+
+## Local development
 
 ```bash
 npm install
-```
+docker compose up -d postgres                 # local Postgres on :5432
+npx prisma migrate deploy                      # apply migrations
+npm run typecheck && npm test                  # checks + unit tests
 
-2. Run DB migrations:
+# HTTP server (production transport), local:
+$env:DATABASE_URL="postgresql://postgres:postgres@localhost:5432/google_ads_mcp?schema=public"
+npm run http:dev                               # http://localhost:3000
 
-```bash
-npx prisma migrate deploy
-```
-
-3. Build and start MCP:
-
-```bash
-npm run build
-npm start
-```
-
-Development mode:
-
-```bash
+# or stdio (single-operator, no auth) for quick local use:
 npm run dev
 ```
 
-## Local Run (Docker Compose)
-
-1. Build MCP image:
-
-```bash
-docker compose build mcp
-```
-
-2. Start Postgres:
+For single-operator mode you need a refresh token. Generate one with the loopback
+OAuth flow (opens a consent URL, writes `GOOGLE_ADS_REFRESH_TOKEN` to `.env`):
 
 ```bash
-docker compose up -d postgres
+npm run generate-token
 ```
 
-3. Run MCP on stdio:
+## Production deploy (VPS + Docker + Caddy)
 
 ```bash
-docker compose run --rm -i mcp
+cp .env.prod.example .env.prod                 # fill DOMAIN, secrets, creds
+docker compose -f docker-compose.prod.yml --env-file .env.prod up -d --build
 ```
 
-Notes:
+This runs Postgres (persistent volume + daily `pg_dump` backups), the MCP HTTP
+server (auto-migrates on start), and Caddy (automatic Let's Encrypt TLS on
+`$DOMAIN`, ports 80/443). DNS for `$DOMAIN` must point at the host.
 
-- Compose overrides `DATABASE_URL` to `postgresql://postgres:postgres@postgres:5432/google_ads_mcp?schema=public`.
-- Container startup runs `prisma migrate deploy` before launching MCP.
-- Stop local stack:
+## Connecting an MCP client
+
+The server speaks **Streamable HTTP** at `POST/GET/DELETE /mcp`, gated by auth.
+
+1. Authenticate via `/api/auth/*` (sign up / sign in, or Google) to obtain a
+   bearer token (`set-auth-token` response header) or session cookie.
+2. Send MCP requests to `/mcp` with `Authorization: Bearer <token>` and
+   `Accept: application/json, text/event-stream`.
+
+Claude-style remote MCP connectors discover authorization via the Better Auth
+`mcp` plugin's OAuth/OIDC metadata.
+
+## Operations runbook
+
+- **Onboard an employee**: invite them to the organization (Better Auth
+  `organization` plugin), they sign in, link their MCC, then an admin grants them
+  the client accounts (`AccountGrant`).
+- **Offboard**: ban/remove the member (Better Auth `admin`/`organization`); their
+  grants and connections cascade.
+- **Grant/revoke account access**: manage `AccountGrant` rows (admin tooling is a
+  follow-up; see `docs/REPLATFORM.md`).
+- **Audit**: `GET /audit?limit=100[&customerId=...]` (org admin only).
+- **Key rotation**: generate a new `TOKEN_ENCRYPTION_KEY`, move the old key into
+  `TOKEN_ENCRYPTION_KEY_PREVIOUS` (comma-separated, decrypt-only). New writes use
+  the new key; existing tokens still decrypt via the previous key and are
+  re-encrypted on next write. Ciphertexts are versioned (`v1`/`v2`).
+- **Backup/restore**: backups land in `./backups`; restore with
+  `gunzip -c <file>.sql.gz | psql ...`. Sync `./backups` off-site for real DR.
+
+## Tests
 
 ```bash
-docker compose down
+npm test                 # vitest unit suite — 859 tests, offline (mocks)
+npm run coverage         # same + coverage; gated at 100% (statements/branches/funcs/lines)
+npm run typecheck        # tsc --noEmit
 ```
 
-## Authentication Modes
+Unit tests cover the executable logic (tools, services, policies, crypto, auth/
+identity, config) at **100%**. Entry-point/side-effectful glue (`index.ts`,
+`server/http.ts`, `createServer.ts`, `betterAuth.ts`, `emails/`, `logger.ts`) is
+excluded from coverage and verified by the live smoke suites below instead.
 
-### Mode A: Single-User (Static Refresh Token)
-
-Use `GOOGLE_ADS_REFRESH_TOKEN` in `.env`.
-
-Good for:
-
-- local testing
-- one operator / one credential
-
-### Mode B: Multi-User OAuth (Recommended)
-
-Run auth server:
+Live smoke scripts (need a running Postgres; set `DATABASE_URL` + keys):
 
 ```bash
-npm run auth-server
+npx tsx scripts/smoke-db.ts        # repositories + encryption (AAD/v2) round-trip
+npx tsx scripts/smoke-auth.ts      # Better Auth sign-up via the Prisma adapter
+npx tsx scripts/smoke-identity.ts  # grant-gated access + anti-impersonation
+npx tsx scripts/smoke-http.ts      # HTTP auth gate → tools/call → audit (server must run)
 ```
 
-Flow:
-
-1. Open `http://localhost:3000/login`.
-2. Complete Google OAuth consent.
-3. Server stores user refresh token in DB and discovers linked accounts.
-4. Use:
-   - `GET /users/:userId/accounts`
-   - `POST /users/:userId/accounts/select` with `{"customerIds":["1234567890"]}`
-5. Pass `userId` in MCP tool calls that support tenant context.
+CI (`.github/workflows/ci.yml`) boots Postgres and runs migrations → typecheck →
+`npm run coverage` (100% gate) → build → all four smoke suites.
 
 ## Skills
 
-The `skills/` folder contains **39 operational playbooks**.  
-Each skill is a folder with a `SKILL.md` (name, objective, workflow, core tools, guardrails).
-
-These are not MCP tools by themselves; they are workflow guides intended for skill-aware agents.
-
-### Included Skills (39)
-
-- `access-billing-permission-validator`
-- `account-connection-and-verification-ops`
-- `ad-copy-refresh-assistant`
-- `asset-sets-and-signals-ops`
-- `assets-and-pmax-linking-ops`
-- `audience-targeting-advanced-ops`
-- `bidding-portfolio-and-adjustments-ops`
-- `campaign-adgroup-ad-keyword-lifecycle-ops`
-- `campaign-drafts-and-experiments-ops`
-- `client-intake-and-goal-mapper`
-- `conversion-goals-offline-data-and-customer-match-ops`
-- `daily-bid-floor-ceiling-check`
-- `daily-budget-pacing-guard`
-- `daily-performance-anomaly-detector`
-- `daily-policy-and-delivery-check`
-- `daily-search-terms-hygiene`
-- `device-profit-split-planner`
-- `existing-account-rapid-audit-48h`
-- `first-30-days-stabilization-playbook`
-- `first-campaign-structure-and-launch-checklist`
-- `greenfield-account-setup-blueprint`
-- `greenfield-market-research`
-- `keyword-planner-budget-forecaster`
-- `landing-intent-mismatch-checker`
-- `merchant-shopping-hotel-and-local-services-ops`
-- `monthly-client-report-pack`
-- `monthly-goal-vs-actual`
-- `monthly-growth-opportunities`
-- `monthly-structure-review`
-- `negative-conflict-checker`
-- `negative-keyword-and-customer-negative-governance-ops`
-- `query-to-keyword-promoter`
-- `recommendations-and-batch-jobs-ops`
-- `tracking-conversion-readiness-check`
-- `weekly-account-health-report`
-- `weekly-audience-cleanup`
-- `weekly-budget-reallocation`
-- `weekly-change-log-auditor`
-- `weekly-experiment-planner`
-
-### How To Install Skills
-
-#### For Codex-style skill systems (`$CODEX_HOME/skills`)
-
-Install one skill:
-
-```bash
-mkdir -p "$CODEX_HOME/skills"
-cp -R skills/weekly-account-health-report "$CODEX_HOME/skills/"
-```
-
-Install all skills:
-
-```bash
-mkdir -p "$CODEX_HOME/skills"
-cp -R skills/* "$CODEX_HOME/skills/"
-```
-
-Windows PowerShell example:
-
-```powershell
-New-Item -ItemType Directory -Force -Path "$env:USERPROFILE\\.codex\\skills" | Out-Null
-Copy-Item -Recurse .\\skills\\* "$env:USERPROFILE\\.codex\\skills\\"
-```
-
-If your agent does not support `SKILL.md` natively, use these files as reusable operational prompt templates.
-
-## Connect To Claude
-
-This server already uses stdio transport, so Claude clients that support stdio MCP can connect directly.
-
-### Option A: Run via Docker from Claude config
-
-Use your client MCP config and add:
-
-```json
-{
-  "mcpServers": {
-    "google-ads-mcp": {
-      "type": "stdio",
-      "command": "docker",
-      "args": [
-        "compose",
-        "-f",
-        "C:\\\\ABSOLUTE\\\\PATH\\\\TO\\\\google-ads-mcp\\\\docker-compose.yml",
-        "run",
-        "--rm",
-        "-i",
-        "mcp"
-      ]
-    }
-  }
-}
-```
-
-### Option B: Run Node build directly
-
-1. Build once:
-
-```bash
-npm run build
-```
-
-2. MCP config example:
-
-```json
-{
-  "mcpServers": {
-    "google-ads-mcp": {
-      "type": "stdio",
-      "command": "node",
-      "args": ["C:\\\\ABSOLUTE\\\\PATH\\\\TO\\\\google-ads-mcp\\\\dist\\\\index.js"],
-      "env": {
-        "DATABASE_URL": "postgresql://postgres:postgres@localhost:5432/google_ads_mcp?schema=public",
-        "GOOGLE_ADS_CLIENT_ID": "your_client_id",
-        "GOOGLE_ADS_CLIENT_SECRET": "your_client_secret",
-        "GOOGLE_ADS_DEVELOPER_TOKEN": "your_developer_token",
-        "GOOGLE_ADS_REFRESH_TOKEN": "your_refresh_token"
-      }
-    }
-  }
-}
-```
-
-## Connect To GPT
-
-There are two GPT paths, and they are different in practice:
-
-### Path 1: OpenAI Agents SDK (local stdio supported)
-
-OpenAI Agents SDK docs indicate MCP over stdio is supported for local servers, which matches this repository architecture.
-
-### Path 2: ChatGPT / Remote MCP integrations
-
-OpenAI MCP docs describe remote MCP integration via SSE/HTTP URL (`server_url`) for ChatGPT-oriented integrations.  
-This repository currently exposes stdio transport only, so direct ChatGPT remote integration requires an adapter or adding a remote MCP transport layer.
-
-If you want native ChatGPT remote connection from this repo, next step is adding Streamable HTTP/SSE transport to the server.
-
-## Useful Scripts
-
-- `npm run build`: compile TypeScript.
-- `npm start`: run compiled MCP server (`dist/index.js`).
-- `npm run dev`: run MCP with ts-node.
-- `npm run auth-server`: run OAuth helper server.
-- `npm run generate-token`: helper script for refresh-token generation.
-- `npm run test:all-tools`: integration script for tool coverage checks.
-
-## Troubleshooting
-
-- `DATABASE_URL must be a PostgreSQL connection string`:
-  Use `postgresql://` or `postgres://`, SQLite is not supported by current env validation.
-- OAuth returns no refresh token:
-  Re-consent with `prompt=consent` and ensure prior grant is revoked if needed.
-- `DEVELOPER_TOKEN_NOT_APPROVED` / `USER_PERMISSION_DENIED`:
-  Check Ads API token approval state and account-level permissions.
-- Merchant Center calls fail:
-  Validate Merchant Center permissions and `MERCHANT_CENTER_ID`.
+The `skills/` folder contains operational playbooks (`SKILL.md`) for skill-aware
+agents — workflow guides, not MCP tools. See each folder for its objective and guardrails.
 
 ## License
 
-This project is **source-available**, not OSI open-source.
-
-- License: `Sustainable Use License (SUL) v1.0` (project-specific form in `LICENSE`)
-- See `LICENSE` for full terms.
-
-Key restrictions:
-
-- use and modification are allowed for internal business use, personal use, and non-commercial use
-- redistribution is allowed only free of charge for non-commercial purposes
-- commercial redistribution / resale / sublicensing are not granted by this license
-
-## References
-
-- Anthropic MCP docs: https://docs.anthropic.com/en/docs/claude-code/mcp
-- OpenAI MCP overview: https://platform.openai.com/docs/mcp
-- OpenAI Developer Mode MCP guide: https://platform.openai.com/docs/guides/developer-mode
-- OpenAI Agents SDK MCP docs: https://openai.github.io/openai-agents-python/mcp/
+Source-available under the Sustainable Use License (SUL) v1.0 — see `LICENSE`.
+Internal/personal/non-commercial use and modification allowed; commercial
+redistribution/resale/sublicensing not granted.

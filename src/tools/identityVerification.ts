@@ -1,7 +1,7 @@
 import { z } from "zod";
-import { getCustomer } from "../services/google-ads/client";
-import logger from "../observability/logger";
-import { toErrorMessage } from "../observability/errorMessage";
+import { getCustomer } from "../services/google-ads/client.js";
+import logger from "../observability/logger.js";
+import { toErrorMessage } from "../observability/errorMessage.js";
 
 const IdentityVerificationSchema = z.object({
   customerId: z.string().describe("The Google Ads Customer ID"),

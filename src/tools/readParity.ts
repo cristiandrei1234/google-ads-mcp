@@ -1,46 +1,17 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
-import { getCustomer } from "../services/google-ads/client";
-import { runQuery } from "./runQuery";
+import { getCustomer } from "../services/google-ads/client.js";
+import { runQuery } from "./runQuery.js";
+import { asTool } from "./_runtime.js";
+import { LimitedListSchema, BaseSchema } from "./_schemas.js";
+import { normalizeCustomerId, escapeGaqlString, extractResourceId, normalizeNumericId, toResourceName } from "../services/google-ads/resourceNames.js";
 
-const BaseSchema = z.object({
-  customerId: z.string().describe("The Google Ads Customer ID"),
-  userId: z.string().optional().describe("SaaS User ID"),
-});
 
-const LimitedListSchema = BaseSchema.extend({
-  limit: z.number().int().min(1).max(1000).default(100),
-});
 
-function normalizeCustomerId(customerId: string): string {
-  return customerId.replace(/-/g, "");
-}
 
-function escapeGaqlString(value: string): string {
-  return value.replace(/\\/g, "\\\\").replace(/'/g, "\\'");
-}
 
-function extractResourceId(value: string, collection: string): string {
-  const match = value.trim().match(new RegExp(`/${collection}/([^/]+)$`));
-  return match?.[1] || value.trim();
-}
 
-function normalizeNumericId(value: string, collection: string): string {
-  const normalized = extractResourceId(value, collection).replace(/[^0-9]/g, "");
-  if (!normalized) {
-    throw new Error(`Invalid ${collection} identifier: ${value}`);
-  }
-  return normalized;
-}
 
-function toResourceName(customerId: string, idOrResourceName: string, collection: string): string {
-  if (idOrResourceName.startsWith("customers/")) {
-    return idOrResourceName;
-  }
-  const customer = normalizeCustomerId(customerId);
-  const id = normalizeNumericId(idOrResourceName, collection);
-  return `customers/${customer}/${collection}/${id}`;
-}
 
 function firstRowResult(rows: unknown[]) {
   return {
@@ -153,15 +124,15 @@ async function getAdGroup(args: z.infer<typeof GetAdGroupSchema>) {
   return firstRowResult(rows);
 }
 
-const GetKeywordSchema = BaseSchema
-  .extend({
-    resourceName: z.string().optional().describe("ad_group_criterion resource name"),
-    adGroupId: z.string().optional().describe("Ad group ID or resource name"),
-    criterionId: z.string().optional().describe("Keyword criterion ID"),
-  })
-  .refine(args => Boolean(args.resourceName) || Boolean(args.adGroupId && args.criterionId), {
-    message: "Provide resourceName or adGroupId+criterionId.",
-  });
+const GetKeywordSchemaObject = BaseSchema.extend({
+  resourceName: z.string().optional().describe("ad_group_criterion resource name"),
+  adGroupId: z.string().optional().describe("Ad group ID or resource name"),
+  criterionId: z.string().optional().describe("Keyword criterion ID"),
+});
+const GetKeywordSchema = GetKeywordSchemaObject.refine(
+  args => Boolean(args.resourceName) || Boolean(args.adGroupId && args.criterionId),
+  { message: "Provide resourceName or adGroupId+criterionId." }
+);
 
 async function getKeyword(args: z.infer<typeof GetKeywordSchema>) {
   const filters: string[] = [];
@@ -198,15 +169,15 @@ async function getKeyword(args: z.infer<typeof GetKeywordSchema>) {
   return firstRowResult(rows);
 }
 
-const GetAdSchema = BaseSchema
-  .extend({
-    resourceName: z.string().optional().describe("ad_group_ad resource name"),
-    adGroupId: z.string().optional().describe("Ad group ID or resource name"),
-    adId: z.string().optional().describe("Ad ID"),
-  })
-  .refine(args => Boolean(args.resourceName) || Boolean(args.adGroupId && args.adId), {
-    message: "Provide resourceName or adGroupId+adId.",
-  });
+const GetAdSchemaObject = BaseSchema.extend({
+  resourceName: z.string().optional().describe("ad_group_ad resource name"),
+  adGroupId: z.string().optional().describe("Ad group ID or resource name"),
+  adId: z.string().optional().describe("Ad ID"),
+});
+const GetAdSchema = GetAdSchemaObject.refine(
+  args => Boolean(args.resourceName) || Boolean(args.adGroupId && args.adId),
+  { message: "Provide resourceName or adGroupId+adId." }
+);
 
 async function getAd(args: z.infer<typeof GetAdSchema>) {
   const filters: string[] = [];
@@ -323,15 +294,15 @@ async function listCampaignNegativeKeywords(args: z.infer<typeof ListCampaignNeg
   });
 }
 
-const GetCampaignNegativeKeywordSchema = BaseSchema
-  .extend({
-    resourceName: z.string().optional().describe("campaign_criterion resource name"),
-    campaignId: z.string().optional().describe("Campaign ID or resource name"),
-    criterionId: z.string().optional().describe("Campaign criterion ID"),
-  })
-  .refine(args => Boolean(args.resourceName) || Boolean(args.campaignId && args.criterionId), {
-    message: "Provide resourceName or campaignId+criterionId.",
-  });
+const GetCampaignNegativeKeywordSchemaObject = BaseSchema.extend({
+  resourceName: z.string().optional().describe("campaign_criterion resource name"),
+  campaignId: z.string().optional().describe("Campaign ID or resource name"),
+  criterionId: z.string().optional().describe("Campaign criterion ID"),
+});
+const GetCampaignNegativeKeywordSchema = GetCampaignNegativeKeywordSchemaObject.refine(
+  args => Boolean(args.resourceName) || Boolean(args.campaignId && args.criterionId),
+  { message: "Provide resourceName or campaignId+criterionId." }
+);
 
 async function getCampaignNegativeKeyword(args: z.infer<typeof GetCampaignNegativeKeywordSchema>) {
   const filters = ["campaign_criterion.negative = true", "campaign_criterion.type = KEYWORD"];
@@ -394,15 +365,15 @@ async function listAdGroupNegativeKeywords(args: z.infer<typeof ListAdGroupNegat
   });
 }
 
-const GetAdGroupNegativeKeywordSchema = BaseSchema
-  .extend({
-    resourceName: z.string().optional().describe("ad_group_criterion resource name"),
-    adGroupId: z.string().optional().describe("Ad group ID or resource name"),
-    criterionId: z.string().optional().describe("Ad group criterion ID"),
-  })
-  .refine(args => Boolean(args.resourceName) || Boolean(args.adGroupId && args.criterionId), {
-    message: "Provide resourceName or adGroupId+criterionId.",
-  });
+const GetAdGroupNegativeKeywordSchemaObject = BaseSchema.extend({
+  resourceName: z.string().optional().describe("ad_group_criterion resource name"),
+  adGroupId: z.string().optional().describe("Ad group ID or resource name"),
+  criterionId: z.string().optional().describe("Ad group criterion ID"),
+});
+const GetAdGroupNegativeKeywordSchema = GetAdGroupNegativeKeywordSchemaObject.refine(
+  args => Boolean(args.resourceName) || Boolean(args.adGroupId && args.criterionId),
+  { message: "Provide resourceName or adGroupId+criterionId." }
+);
 
 async function getAdGroupNegativeKeyword(args: z.infer<typeof GetAdGroupNegativeKeywordSchema>) {
   const filters = ["ad_group_criterion.negative = true", "ad_group_criterion.type = KEYWORD"];
@@ -486,15 +457,15 @@ async function getConversionAction(args: z.infer<typeof GetConversionActionSchem
   return firstRowResult(rows);
 }
 
-const GetCustomerConversionGoalSchema = BaseSchema
-  .extend({
-    resourceName: z.string().optional(),
-    category: z.string().optional(),
-    origin: z.string().optional(),
-  })
-  .refine(args => Boolean(args.resourceName) || Boolean(args.category && args.origin), {
-    message: "Provide resourceName or category+origin.",
-  });
+const GetCustomerConversionGoalSchemaObject = BaseSchema.extend({
+  resourceName: z.string().optional(),
+  category: z.string().optional(),
+  origin: z.string().optional(),
+});
+const GetCustomerConversionGoalSchema = GetCustomerConversionGoalSchemaObject.refine(
+  args => Boolean(args.resourceName) || Boolean(args.category && args.origin),
+  { message: "Provide resourceName or category+origin." }
+);
 
 function customerConversionGoalResourceName(customerId: string, category: string, origin: string): string {
   return `customers/${normalizeCustomerId(customerId)}/customerConversionGoals/${category}~${origin}`;
@@ -519,16 +490,16 @@ async function getCustomerConversionGoal(args: z.infer<typeof GetCustomerConvers
   return firstRowResult(rows);
 }
 
-const GetCampaignConversionGoalSchema = BaseSchema
-  .extend({
-    resourceName: z.string().optional(),
-    campaignId: z.string().optional(),
-    category: z.string().optional(),
-    origin: z.string().optional(),
-  })
-  .refine(args => Boolean(args.resourceName) || Boolean(args.campaignId && args.category && args.origin), {
-    message: "Provide resourceName or campaignId+category+origin.",
-  });
+const GetCampaignConversionGoalSchemaObject = BaseSchema.extend({
+  resourceName: z.string().optional(),
+  campaignId: z.string().optional(),
+  category: z.string().optional(),
+  origin: z.string().optional(),
+});
+const GetCampaignConversionGoalSchema = GetCampaignConversionGoalSchemaObject.refine(
+  args => Boolean(args.resourceName) || Boolean(args.campaignId && args.category && args.origin),
+  { message: "Provide resourceName or campaignId+category+origin." }
+);
 
 function campaignConversionGoalResourceName(
   customerId: string,
@@ -826,15 +797,15 @@ async function getAssetSet(args: z.infer<typeof GetAssetSetSchema>) {
   return firstRowResult(rows);
 }
 
-const GetAssetSetAssetSchema = BaseSchema
-  .extend({
-    resourceName: z.string().optional().describe("asset_set_asset resource name"),
-    assetSetId: z.string().optional().describe("Asset set ID or resource name"),
-    assetId: z.string().optional().describe("Asset ID or resource name"),
-  })
-  .refine(args => Boolean(args.resourceName) || Boolean(args.assetSetId && args.assetId), {
-    message: "Provide resourceName or assetSetId+assetId.",
-  });
+const GetAssetSetAssetSchemaObject = BaseSchema.extend({
+  resourceName: z.string().optional().describe("asset_set_asset resource name"),
+  assetSetId: z.string().optional().describe("Asset set ID or resource name"),
+  assetId: z.string().optional().describe("Asset ID or resource name"),
+});
+const GetAssetSetAssetSchema = GetAssetSetAssetSchemaObject.refine(
+  args => Boolean(args.resourceName) || Boolean(args.assetSetId && args.assetId),
+  { message: "Provide resourceName or assetSetId+assetId." }
+);
 
 function assetSetAssetResourceName(customerId: string, assetSetId: string, assetId: string): string {
   const customer = normalizeCustomerId(customerId);
@@ -862,15 +833,15 @@ async function getAssetSetAsset(args: z.infer<typeof GetAssetSetAssetSchema>) {
   return firstRowResult(rows);
 }
 
-const GetCampaignAssetSetSchema = BaseSchema
-  .extend({
-    resourceName: z.string().optional().describe("campaign_asset_set resource name"),
-    campaignId: z.string().optional().describe("Campaign ID or resource name"),
-    assetSetId: z.string().optional().describe("Asset set ID or resource name"),
-  })
-  .refine(args => Boolean(args.resourceName) || Boolean(args.campaignId && args.assetSetId), {
-    message: "Provide resourceName or campaignId+assetSetId.",
-  });
+const GetCampaignAssetSetSchemaObject = BaseSchema.extend({
+  resourceName: z.string().optional().describe("campaign_asset_set resource name"),
+  campaignId: z.string().optional().describe("Campaign ID or resource name"),
+  assetSetId: z.string().optional().describe("Asset set ID or resource name"),
+});
+const GetCampaignAssetSetSchema = GetCampaignAssetSetSchemaObject.refine(
+  args => Boolean(args.resourceName) || Boolean(args.campaignId && args.assetSetId),
+  { message: "Provide resourceName or campaignId+assetSetId." }
+);
 
 function campaignAssetSetResourceName(customerId: string, campaignId: string, assetSetId: string): string {
   const customer = normalizeCustomerId(customerId);
@@ -961,22 +932,6 @@ async function listReachPlannableProducts(args: z.infer<typeof ListReachPlannabl
   });
 }
 
-async function asTool(fn: (args: any) => Promise<any>, args: any): Promise<{
-  content: [{ type: "text"; text: string }];
-  isError?: true;
-}> {
-  try {
-    const result = await fn(args);
-    return {
-      content: [{ type: "text" as const, text: JSON.stringify(result, null, 2) }],
-    };
-  } catch (error: any) {
-    return {
-      content: [{ type: "text" as const, text: `Error: ${error.message}` }],
-      isError: true,
-    };
-  }
-}
 
 export const READ_PARITY_EXPECTED_TOOL_NAMES: string[] = [
   "get_campaign",
@@ -1029,11 +984,13 @@ export function registerReadParityTools(server: McpServer) {
   server.registerTool("get_ad_group", { description: "Get one ad group.", inputSchema: GetAdGroupSchema.shape }, args =>
     asTool(getAdGroup, args)
   );
-  server.registerTool("get_keyword", { description: "Get one keyword.", inputSchema: GetKeywordSchema.shape }, args =>
-    asTool(getKeyword, args)
+  server.registerTool(
+    "get_keyword",
+    { description: "Get one keyword.", inputSchema: GetKeywordSchemaObject.shape },
+    args => asTool(a => getKeyword(GetKeywordSchema.parse(a)), args)
   );
-  server.registerTool("get_ad", { description: "Get one ad.", inputSchema: GetAdSchema.shape }, args =>
-    asTool(getAd, args)
+  server.registerTool("get_ad", { description: "Get one ad.", inputSchema: GetAdSchemaObject.shape }, args =>
+    asTool(a => getAd(GetAdSchema.parse(a)), args)
   );
   server.registerTool("get_asset", { description: "Get one asset.", inputSchema: GetAssetSchema.shape }, args =>
     asTool(getAsset, args)
@@ -1050,8 +1007,8 @@ export function registerReadParityTools(server: McpServer) {
   );
   server.registerTool(
     "get_campaign_negative_keyword",
-    { description: "Get one campaign-level negative keyword.", inputSchema: GetCampaignNegativeKeywordSchema.shape },
-    args => asTool(getCampaignNegativeKeyword, args)
+    { description: "Get one campaign-level negative keyword.", inputSchema: GetCampaignNegativeKeywordSchemaObject.shape },
+    args => asTool(a => getCampaignNegativeKeyword(GetCampaignNegativeKeywordSchema.parse(a)), args)
   );
   server.registerTool(
     "list_ad_group_negative_keywords",
@@ -1060,8 +1017,8 @@ export function registerReadParityTools(server: McpServer) {
   );
   server.registerTool(
     "get_ad_group_negative_keyword",
-    { description: "Get one ad-group-level negative keyword.", inputSchema: GetAdGroupNegativeKeywordSchema.shape },
-    args => asTool(getAdGroupNegativeKeyword, args)
+    { description: "Get one ad-group-level negative keyword.", inputSchema: GetAdGroupNegativeKeywordSchemaObject.shape },
+    args => asTool(a => getAdGroupNegativeKeyword(GetAdGroupNegativeKeywordSchema.parse(a)), args)
   );
   server.registerTool(
     "get_shared_negative_keyword_list",
@@ -1075,13 +1032,13 @@ export function registerReadParityTools(server: McpServer) {
   );
   server.registerTool(
     "get_customer_conversion_goal",
-    { description: "Get one customer conversion goal.", inputSchema: GetCustomerConversionGoalSchema.shape },
-    args => asTool(getCustomerConversionGoal, args)
+    { description: "Get one customer conversion goal.", inputSchema: GetCustomerConversionGoalSchemaObject.shape },
+    args => asTool(a => getCustomerConversionGoal(GetCustomerConversionGoalSchema.parse(a)), args)
   );
   server.registerTool(
     "get_campaign_conversion_goal",
-    { description: "Get one campaign conversion goal.", inputSchema: GetCampaignConversionGoalSchema.shape },
-    args => asTool(getCampaignConversionGoal, args)
+    { description: "Get one campaign conversion goal.", inputSchema: GetCampaignConversionGoalSchemaObject.shape },
+    args => asTool(a => getCampaignConversionGoal(GetCampaignConversionGoalSchema.parse(a)), args)
   );
   server.registerTool("get_user_list", { description: "Get one user list.", inputSchema: GetUserListSchema.shape }, args =>
     asTool(getUserList, args)
@@ -1134,13 +1091,13 @@ export function registerReadParityTools(server: McpServer) {
   );
   server.registerTool(
     "get_asset_set_asset",
-    { description: "Get one asset-set asset link.", inputSchema: GetAssetSetAssetSchema.shape },
-    args => asTool(getAssetSetAsset, args)
+    { description: "Get one asset-set asset link.", inputSchema: GetAssetSetAssetSchemaObject.shape },
+    args => asTool(a => getAssetSetAsset(GetAssetSetAssetSchema.parse(a)), args)
   );
   server.registerTool(
     "get_campaign_asset_set",
-    { description: "Get one campaign asset-set link.", inputSchema: GetCampaignAssetSetSchema.shape },
-    args => asTool(getCampaignAssetSet, args)
+    { description: "Get one campaign asset-set link.", inputSchema: GetCampaignAssetSetSchemaObject.shape },
+    args => asTool(a => getCampaignAssetSet(GetCampaignAssetSetSchema.parse(a)), args)
   );
   server.registerTool(
     "get_asset_group_signal",

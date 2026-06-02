@@ -1,11 +1,10 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
-import { getCustomer } from "../services/google-ads/client";
-import { runMutation } from "../services/google-ads/mutator";
-const BaseSchema = z.object({
-    customerId: z.string().describe("The Google Ads Customer ID"),
-    userId: z.string().optional().describe("SaaS User ID"),
-});
+import { getCustomer } from "../services/google-ads/client.js";
+import { runMutation } from "../services/google-ads/mutator.js";
+import { assertResourceBelongsToCustomer } from "../policies/resourceGuard.js";
+import { asTool } from "./_runtime.js";
+import { BaseSchema } from "./_schemas.js";
 const UpdateConversionActionSchema = BaseSchema.extend({
     conversionActionId: z.string(),
     name: z.string().optional(),
@@ -138,11 +137,12 @@ async function createOfflineUserDataJob(args: z.infer<typeof CreateOfflineUserDa
 }
 const AddOfflineUserDataJobOperationsSchema = BaseSchema.extend({
     resourceName: z.string().describe("customers/{customerId}/offlineUserDataJobs/{jobId}"),
-    operations: z.array(z.any()).min(1).describe("Raw offline user data operations payload"),
+    operations: z.array(z.any()).min(1).describe("Raw offline user data operations payload. WARNING: any user_identifiers (email/phone/address) MUST be pre-normalized and SHA-256 hashed; prefer the customer-match tools which hash for you."),
     enablePartialFailure: z.boolean().default(true),
     enableWarnings: z.boolean().default(true),
 });
 async function addOfflineUserDataJobOperations(args: z.infer<typeof AddOfflineUserDataJobOperationsSchema>) {
+    assertResourceBelongsToCustomer(args.resourceName, args.customerId);
     const customer = await getCustomer(args.customerId, args.userId);
     return (customer as any).offlineUserDataJobs.addOfflineUserDataJobOperations({
         resource_name: args.resourceName,
@@ -155,27 +155,11 @@ const RunOfflineUserDataJobSchema = BaseSchema.extend({
     resourceName: z.string(),
 });
 async function runOfflineUserDataJob(args: z.infer<typeof RunOfflineUserDataJobSchema>) {
+    assertResourceBelongsToCustomer(args.resourceName, args.customerId);
     const customer = await getCustomer(args.customerId, args.userId);
     return (customer as any).offlineUserDataJobs.runOfflineUserDataJob({
         resource_name: args.resourceName,
     });
-}
-async function asTool(fn: (args: any) => Promise<any>, args: any): Promise<{
-    content: [
-        {
-            type: "text";
-            text: string;
-        }
-    ];
-    isError?: true;
-}> {
-    try {
-        const result = await fn(args);
-        return { content: [{ type: "text" as const, text: JSON.stringify(result, null, 2) }] };
-    }
-    catch (error: any) {
-        return { content: [{ type: "text" as const, text: `Error: ${error.message}` }], isError: true };
-    }
 }
 export function registerConversionsAdvancedTools(server: McpServer) {
     server.registerTool("update_conversion_action", { description: "Update an existing conversion action.", inputSchema: UpdateConversionActionSchema.shape }, args => asTool(updateConversionAction, args));

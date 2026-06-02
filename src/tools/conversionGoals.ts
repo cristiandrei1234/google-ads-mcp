@@ -1,30 +1,15 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
-import { getCustomer } from "../services/google-ads/client";
-import { runMutation } from "../services/google-ads/mutator";
-import { runQuery } from "./runQuery";
+import { getCustomer } from "../services/google-ads/client.js";
+import { runMutation } from "../services/google-ads/mutator.js";
+import { runQuery } from "./runQuery.js";
+import { asTool } from "./_runtime.js";
+import { BaseSchema } from "./_schemas.js";
+import { normalizeCustomerId, extractResourceId, normalizeNumericId } from "../services/google-ads/resourceNames.js";
 
-const BaseSchema = z.object({
-  customerId: z.string().describe("The Google Ads Customer ID"),
-  userId: z.string().optional().describe("SaaS User ID"),
-});
 
-function normalizeCustomerId(customerId: string): string {
-  return customerId.replace(/-/g, "");
-}
 
-function extractResourceId(value: string, collection: string): string {
-  const match = value.trim().match(new RegExp(`/${collection}/([^/]+)$`));
-  return match?.[1] || value.trim();
-}
 
-function normalizeNumericId(value: string, collection: string): string {
-  const normalized = extractResourceId(value, collection).replace(/[^0-9]/g, "");
-  if (!normalized) {
-    throw new Error(`Invalid ${collection} identifier: ${value}`);
-  }
-  return normalized;
-}
 
 function toCustomerConversionGoalResourceName(
   customerId: string,
@@ -168,22 +153,6 @@ async function setCampaignConversionGoal(args: z.infer<typeof SetCampaignConvers
   ]);
 }
 
-async function asTool(fn: (args: any) => Promise<any>, args: any): Promise<{
-  content: [{ type: "text"; text: string }];
-  isError?: true;
-}> {
-  try {
-    const result = await fn(args);
-    return {
-      content: [{ type: "text" as const, text: JSON.stringify(result, null, 2) }],
-    };
-  } catch (error: any) {
-    return {
-      content: [{ type: "text" as const, text: `Error: ${error.message}` }],
-      isError: true,
-    };
-  }
-}
 
 export function registerConversionGoalTools(server: McpServer) {
   server.registerTool(
@@ -200,7 +169,7 @@ export function registerConversionGoalTools(server: McpServer) {
       description: "Set customer-level conversion goal biddable flag.",
       inputSchema: SetCustomerConversionGoalSchema.shape,
     },
-    args => asTool(setCustomerConversionGoal, args)
+    args => asTool(a => setCustomerConversionGoal(SetCustomerConversionGoalSchema.parse(a)), args)
   );
   server.registerTool(
     "list_campaign_conversion_goals",
@@ -216,6 +185,6 @@ export function registerConversionGoalTools(server: McpServer) {
       description: "Set campaign-level conversion goal biddable flag.",
       inputSchema: SetCampaignConversionGoalSchema.shape,
     },
-    args => asTool(setCampaignConversionGoal, args)
+    args => asTool(a => setCampaignConversionGoal(SetCampaignConversionGoalSchema.parse(a)), args)
   );
 }

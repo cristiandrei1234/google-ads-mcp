@@ -1,6 +1,6 @@
 import { z } from "zod";
-import { getCustomer } from "../services/google-ads/client";
-import logger from "../observability/logger";
+import { getCustomer } from "../services/google-ads/client.js";
+import logger from "../observability/logger.js";
 
 // --- Search Terms ---
 
@@ -124,9 +124,7 @@ export async function getChangeHistory(args: z.infer<typeof GetChangeHistorySche
     conditions.push(`change_event.change_resource_type IN ('${types}')`);
   }
 
-  if (conditions.length > 0) {
-    query += ` WHERE ${conditions.join(" AND ")}`;
-  }
+  query += ` WHERE ${conditions.join(" AND ")}`;
 
   query += ` ORDER BY change_event.change_date_time DESC LIMIT ${args.limit}`;
 

@@ -1,8 +1,10 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
-import { getCustomer } from "../services/google-ads/client";
-import logger from "../observability/logger";
-import { toErrorMessage } from "../observability/errorMessage";
+import { getCustomer } from "../services/google-ads/client.js";
+import logger from "../observability/logger.js";
+import { toErrorMessage } from "../observability/errorMessage.js";
+import { assertSafeGaqlFragment } from "../policies/gaql.js";
+import { asTool } from "./_runtime.js";
 
 const AudienceInsightsSchema = z.object({
   customerId: z.string().describe("The Google Ads Customer ID"),
@@ -58,6 +60,9 @@ export const ListHotelPerformanceToolSchema = ListHotelPerformanceSchema;
 export async function listHotelPerformance(args: z.infer<typeof ListHotelPerformanceSchema>) {
   const customer = await getCustomer(args.customerId, args.userId);
 
+  assertSafeGaqlFragment(args.where, "where");
+  assertSafeGaqlFragment(args.orderBy, "orderBy");
+  for (const f of args.fields) assertSafeGaqlFragment(f, "fields");
   const selectClause = args.fields.join(",\n      ");
   const whereClause = args.where ? `\n    WHERE ${args.where}` : "";
   const orderByClause = args.orderBy ? `\n    ORDER BY ${args.orderBy}` : "";
@@ -71,23 +76,6 @@ export async function listHotelPerformance(args: z.infer<typeof ListHotelPerform
   return customer.query(query);
 }
 
-async function asTool(fn: (args: any) => Promise<any>, args: any): Promise<{
-  content: [{ type: "text"; text: string }];
-  isError?: true;
-}> {
-  try {
-    const result = await fn(args);
-    return {
-      content: [{ type: "text" as const, text: JSON.stringify(result, null, 2) }],
-    };
-  } catch (error: any) {
-    const errorMessage = toErrorMessage(error);
-    return {
-      content: [{ type: "text" as const, text: `Error: ${errorMessage}` }],
-      isError: true,
-    };
-  }
-}
 
 export function registerVerticalTools(server: McpServer) {
   server.registerTool(

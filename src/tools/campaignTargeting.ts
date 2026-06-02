@@ -1,19 +1,11 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
-import { getCustomer } from "../services/google-ads/client";
-import { runMutation } from "../services/google-ads/mutator";
-import { runQuery } from "./runQuery";
-const BaseSchema = z.object({
-    customerId: z.string().describe("The Google Ads Customer ID"),
-    userId: z.string().optional().describe("SaaS User ID"),
-});
-function chunk<T>(items: T[], size: number): T[][] {
-    const chunks: T[][] = [];
-    for (let i = 0; i < items.length; i += size) {
-        chunks.push(items.slice(i, i + size));
-    }
-    return chunks;
-}
+import { getCustomer } from "../services/google-ads/client.js";
+import { runMutation } from "../services/google-ads/mutator.js";
+import { runQuery } from "./runQuery.js";
+import { asTool } from "./_runtime.js";
+import { BaseSchema, chunk } from "./_schemas.js";
+import { escapeGaqlString } from "../services/google-ads/resourceNames.js";
 const SetCampaignGeoTargetingSchema = BaseSchema.extend({
     campaignId: z.string(),
     addGeoTargetConstantIds: z.array(z.string()).default([]),
@@ -284,9 +276,6 @@ async function setCampaignBiddingStrategy(args: z.infer<typeof SetCampaignBiddin
         },
     ]);
 }
-function escapeGaqlString(value: string): string {
-    return value.replace(/\\/g, "\\\\").replace(/'/g, "\\'");
-}
 const SetCampaignLabelsSchema = BaseSchema.extend({
     campaignId: z.string(),
     labelNames: z.array(z.string().min(1)).min(1),
@@ -305,8 +294,6 @@ async function setCampaignLabels(args: z.infer<typeof SetCampaignLabelsSchema>) 
     }
     const missing = args.labelNames.filter(name => !existingByName.has(name));
     for (const nameChunk of chunk(missing, 100)) {
-        if (nameChunk.length === 0)
-            continue;
         await runMutation(customer, nameChunk.map(name => ({
             label_operation: {
                 create: { name },
@@ -350,36 +337,12 @@ async function setCampaignLabels(args: z.infer<typeof SetCampaignLabelsSchema>) 
         }
     }
     for (const opsChunk of chunk(operations, 100)) {
-        if (opsChunk.length > 0) {
-            await runMutation(customer, opsChunk);
-        }
+        await runMutation(customer, opsChunk);
     }
     return {
         operations: operations.length,
         desiredLabels: desired.size,
     };
-}
-async function asTool(fn: (args: any) => Promise<any>, args: any): Promise<{
-    content: [
-        {
-            type: "text";
-            text: string;
-        }
-    ];
-    isError?: true;
-}> {
-    try {
-        const result = await fn(args);
-        return {
-            content: [{ type: "text" as const, text: JSON.stringify(result, null, 2) }],
-        };
-    }
-    catch (error: any) {
-        return {
-            content: [{ type: "text" as const, text: `Error: ${error.message}` }],
-            isError: true,
-        };
-    }
 }
 export function registerCampaignTargetingTools(server: McpServer) {
     server.registerTool("set_campaign_geo_targeting", { description: "Add/remove campaign geo criteria.", inputSchema: SetCampaignGeoTargetingSchema.shape }, args => asTool(setCampaignGeoTargeting, args));

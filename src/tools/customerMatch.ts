@@ -1,12 +1,12 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { createHash } from "crypto";
 import { z } from "zod";
-import { getCustomer } from "../services/google-ads/client";
-import { runQuery } from "./runQuery";
-const BaseSchema = z.object({
-    customerId: z.string().describe("The Google Ads Customer ID"),
-    userId: z.string().optional().describe("SaaS User ID"),
-});
+import { getCustomer } from "../services/google-ads/client.js";
+import { runQuery } from "./runQuery.js";
+import { assertResourceBelongsToCustomer } from "../policies/resourceGuard.js";
+import { asTool } from "./_runtime.js";
+import { BaseSchema } from "./_schemas.js";
+import { normalizeCustomerId, extractResourceId } from "../services/google-ads/resourceNames.js";
 const CustomerMatchMemberSchema = z
     .object({
     email: z.string().email().optional(),
@@ -22,13 +22,6 @@ const CustomerMatchMemberSchema = z
     message: "Each member must include email, phoneNumber, or full address tuple (firstName,lastName,countryCode,postalCode).",
 });
 type CustomerMatchMember = z.infer<typeof CustomerMatchMemberSchema>;
-function normalizeCustomerId(customerId: string): string {
-    return customerId.replace(/-/g, "");
-}
-function extractResourceId(value: string, collection: string): string {
-    const match = value.trim().match(new RegExp(`/${collection}/([^/]+)$`));
-    return match?.[1] || value.trim();
-}
 function toUserListResourceName(customerId: string, userListIdOrResourceName: string): string {
     if (userListIdOrResourceName.startsWith("customers/")) {
         return userListIdOrResourceName;
@@ -96,6 +89,7 @@ const AddCustomerMatchMembersSchema = BaseSchema.extend({
     enableWarnings: z.boolean().default(true),
 });
 async function addCustomerMatchMembers(args: z.infer<typeof AddCustomerMatchMembersSchema>) {
+    assertResourceBelongsToCustomer(args.resourceName, args.customerId);
     const customer = await getCustomer(args.customerId, args.userId);
     return (customer as any).offlineUserDataJobs.addOfflineUserDataJobOperations({
         resource_name: args.resourceName,
@@ -111,6 +105,7 @@ const RemoveCustomerMatchMembersSchema = BaseSchema.extend({
     enableWarnings: z.boolean().default(true),
 });
 async function removeCustomerMatchMembers(args: z.infer<typeof RemoveCustomerMatchMembersSchema>) {
+    assertResourceBelongsToCustomer(args.resourceName, args.customerId);
     const customer = await getCustomer(args.customerId, args.userId);
     return (customer as any).offlineUserDataJobs.addOfflineUserDataJobOperations({
         resource_name: args.resourceName,
@@ -181,28 +176,6 @@ async function listCustomerMatchJobs(args: z.infer<typeof ListCustomerMatchJobsS
     ORDER BY offline_user_data_job.id DESC
     LIMIT ${args.limit}`,
     });
-}
-async function asTool(fn: (args: any) => Promise<any>, args: any): Promise<{
-    content: [
-        {
-            type: "text";
-            text: string;
-        }
-    ];
-    isError?: true;
-}> {
-    try {
-        const result = await fn(args);
-        return {
-            content: [{ type: "text" as const, text: JSON.stringify(result, null, 2) }],
-        };
-    }
-    catch (error: any) {
-        return {
-            content: [{ type: "text" as const, text: `Error: ${error.message}` }],
-            isError: true,
-        };
-    }
 }
 export function registerCustomerMatchTools(server: McpServer) {
     server.registerTool("add_customer_match_members", { description: "Add hashed Customer Match members to an existing offline user data job.", inputSchema: AddCustomerMatchMembersSchema.shape }, args => asTool(addCustomerMatchMembers, args));

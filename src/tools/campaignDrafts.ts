@@ -1,47 +1,22 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
-import { getCustomer } from "../services/google-ads/client";
-import { runMutation } from "../services/google-ads/mutator";
-import { runQuery } from "./runQuery";
+import { getCustomer } from "../services/google-ads/client.js";
+import { runMutation } from "../services/google-ads/mutator.js";
+import { runQuery } from "./runQuery.js";
+import { asTool } from "./_runtime.js";
+import { BaseSchema } from "./_schemas.js";
+import { normalizeCustomerId, extractResourceId, normalizeNumericId, toResourceName } from "../services/google-ads/resourceNames.js";
 
-const BaseSchema = z.object({
-  customerId: z.string().describe("The Google Ads Customer ID"),
-  userId: z.string().optional().describe("SaaS User ID"),
-});
 
-function normalizeCustomerId(customerId: string): string {
-  return customerId.replace(/-/g, "");
-}
 
-function extractResourceId(value: string, collection: string): string {
-  const match = value.trim().match(new RegExp(`/${collection}/([^/]+)$`));
-  return match?.[1] || value.trim();
-}
 
-function normalizeNumericId(value: string, collection: string): string {
-  const normalized = extractResourceId(value, collection).replace(/[^0-9]/g, "");
-  if (!normalized) {
-    throw new Error(`Invalid ${collection} identifier: ${value}`);
-  }
-  return normalized;
-}
 
 function toCampaignResourceName(customerId: string, campaignIdOrResourceName: string): string {
-  if (campaignIdOrResourceName.startsWith("customers/")) {
-    return campaignIdOrResourceName;
-  }
-  const normalizedCustomerId = normalizeCustomerId(customerId);
-  const campaignId = normalizeNumericId(campaignIdOrResourceName, "campaigns");
-  return `customers/${normalizedCustomerId}/campaigns/${campaignId}`;
+  return toResourceName(customerId, campaignIdOrResourceName, "campaigns");
 }
 
 function toCampaignDraftResourceName(customerId: string, draftIdOrResourceName: string): string {
-  if (draftIdOrResourceName.startsWith("customers/")) {
-    return draftIdOrResourceName;
-  }
-  const normalizedCustomerId = normalizeCustomerId(customerId);
-  const draftId = normalizeNumericId(draftIdOrResourceName, "campaignDrafts");
-  return `customers/${normalizedCustomerId}/campaignDrafts/${draftId}`;
+  return toResourceName(customerId, draftIdOrResourceName, "campaignDrafts");
 }
 
 function resolveValidateOnlyFlag(override?: boolean): boolean {
@@ -227,22 +202,6 @@ async function listCampaignDraftAsyncErrors(args: z.infer<typeof ListCampaignDra
   };
 }
 
-async function asTool(fn: (args: any) => Promise<any>, args: any): Promise<{
-  content: [{ type: "text"; text: string }];
-  isError?: true;
-}> {
-  try {
-    const result = await fn(args);
-    return {
-      content: [{ type: "text" as const, text: JSON.stringify(result, null, 2) }],
-    };
-  } catch (error: any) {
-    return {
-      content: [{ type: "text" as const, text: `Error: ${error.message}` }],
-      isError: true,
-    };
-  }
-}
 
 export function registerCampaignDraftTools(server: McpServer) {
   server.registerTool(

@@ -5,6 +5,10 @@ dist/
 .env
 .env.*
 !.env.example
+!.env.prod.example
+
+# DB backups
+/backups/
 
 # Local DB / runtime artifacts
 dev.db
@@ -18,3 +22,6 @@ src/generated/prisma/
 Thumbs.db
 .vscode/
 .idea/
+
+# Coverage output
+coverage/

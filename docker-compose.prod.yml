@@ -1,0 +1,79 @@
+# Production stack: HTTP MCP server behind Caddy (auto-TLS), Postgres with a
+# persistent volume + daily backups. Bring up with:
+#   cp .env.prod.example .env.prod && edit it
+#   docker compose -f docker-compose.prod.yml --env-file .env.prod up -d --build
+services:
+  postgres:
+    image: postgres:17-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: google_ads_mcp
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env.prod}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d google_ads_mcp"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  mcp:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    env_file:
+      - .env.prod
+    environment:
+      DATABASE_URL: postgresql://postgres:${POSTGRES_PASSWORD}@postgres:5432/google_ads_mcp?schema=public
+      PORT: "3000"
+      NODE_ENV: production
+    expose:
+      - "3000" # internal only; Caddy is the public entrypoint
+    command: ["sh", "-c", "npx prisma migrate deploy && node dist/server/http.js"]
+
+  caddy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    depends_on:
+      - mcp
+    ports:
+      - "80:80"
+      - "443:443"
+    environment:
+      DOMAIN: ${DOMAIN:?set DOMAIN in .env.prod}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+
+  # Daily pg_dump to a local volume. Copy/sync ./backups off-site for real DR.
+  backup:
+    image: postgres:17-alpine
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      PGPASSWORD: ${POSTGRES_PASSWORD}
+    volumes:
+      - ./backups:/backups
+    entrypoint: ["sh", "-c"]
+    command:
+      - >
+        while true; do
+          ts=$$(date +%Y%m%d-%H%M%S);
+          pg_dump -h postgres -U postgres -d google_ads_mcp | gzip > /backups/google_ads_mcp-$$ts.sql.gz
+          && echo "backup written: $$ts";
+          find /backups -name '*.sql.gz' -mtime +14 -delete;
+          sleep 86400;
+        done
+
+volumes:
+  postgres_data:
+  caddy_data:
+  caddy_config:

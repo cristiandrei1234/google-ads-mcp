@@ -1,7 +1,7 @@
 import { z } from "zod";
-import { getCustomer } from "../services/google-ads/client";
-import { runMutation } from "../services/google-ads/mutator";
-import logger from "../observability/logger";
+import { getCustomer } from "../services/google-ads/client.js";
+import { runMutation } from "../services/google-ads/mutator.js";
+import logger from "../observability/logger.js";
 
 // --- Conversion Actions ---
 

@@ -1,3 +1,26 @@
+// =============================================================================
+// Google Ads MCP — production multi-tenant data model
+//
+// Identity & authz (agency model):
+//   Agency MCC (admin)  ->  Employee MCC (each employee)  ->  Client accounts
+//
+//   - An Organization is the agency. Members are employees (Better Auth
+//     `organization` plugin). Roles come from the member row.
+//   - Each employee links their OWN Google account, producing one
+//     GoogleAdsConnection (their MCC + encrypted refresh token). The agency
+//     admin links the agency MCC, which is parent of the employee MCCs.
+//   - An employee may operate on a customerId iff it is reachable under a
+//     connection granted to them (AccountGrant). Admin's agency connection
+//     reaches everything below it.
+//
+// IMPORTANT: the Better Auth tables below (User..OauthConsent) follow the
+// documented v1.6 schema, but Better Auth is the source of truth for them.
+// After finalizing src/auth/betterAuth.ts, reconcile with:
+//     npx @better-auth/cli generate
+// The domain tables (GoogleAdsConnection, AccountGrant, AuditLog) are
+// authoritative and owned by this project.
+// =============================================================================
+
 generator client {
   provider = "prisma-client-js"
 }
@@ -6,35 +29,238 @@ datasource db {
   provider = "postgresql"
 }
 
+// ----------------------------------------------------------------------------
+// Better Auth — core
+// ----------------------------------------------------------------------------
+
 model User {
+  id            String   @id @default(cuid())
+  name          String?
+  email         String   @unique
+  emailVerified Boolean  @default(false)
+  image         String?
+  // admin plugin
+  role          String?
+  banned        Boolean? @default(false)
+  banReason     String?
+  banExpires    DateTime?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  sessions    Session[]
+  accounts    Account[]
+  members     Member[]
+  invitations Invitation[]
+}
+
+model Session {
   id        String   @id @default(cuid())
-  email     String   @unique
-  name      String?
+  token     String   @unique
+  expiresAt DateTime
+  ipAddress String?
+  userAgent String?
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  // organization plugin
+  activeOrganizationId String?
+  // admin plugin
+  impersonatedBy       String?
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  credentials GoogleAdsCredential?
-  accounts    AccountAssociation[]
+  @@index([userId])
 }
 
-model GoogleAdsCredential {
+model Account {
+  id                    String    @id @default(cuid())
+  accountId             String
+  providerId            String
+  userId                String
+  user                  User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  accessToken           String?
+  refreshToken          String?
+  idToken               String?
+  accessTokenExpiresAt  DateTime?
+  refreshTokenExpiresAt DateTime?
+  scope                 String?
+  password              String?
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
+
+  @@index([userId])
+}
+
+model Verification {
+  id         String   @id @default(cuid())
+  identifier String
+  value      String
+  expiresAt  DateTime
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@index([identifier])
+}
+
+// ----------------------------------------------------------------------------
+// Better Auth — organization plugin (agency = organization, employee = member)
+// ----------------------------------------------------------------------------
+
+model Organization {
+  id        String   @id @default(cuid())
+  name      String
+  slug      String?  @unique
+  logo      String?
+  metadata  String?
+  createdAt DateTime @default(now())
+
+  members     Member[]
+  invitations Invitation[]
+  connections GoogleAdsConnection[]
+}
+
+model Member {
+  id             String       @id @default(cuid())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  userId         String
+  user           User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  role           String       @default("member")
+  createdAt      DateTime     @default(now())
+
+  ownedConnections GoogleAdsConnection[] @relation("ConnectionOwner")
+  grants           AccountGrant[]
+
+  @@unique([organizationId, userId])
+  @@index([userId])
+}
+
+model Invitation {
+  id             String       @id @default(cuid())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  email          String
+  role           String?
+  status         String       @default("pending")
+  expiresAt      DateTime
+  createdAt      DateTime     @default(now())
+  inviterId      String
+  inviter        User         @relation(fields: [inviterId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId])
+}
+
+// ----------------------------------------------------------------------------
+// Better Auth — oidc-provider / mcp plugin (remote MCP connector OAuth)
+// ----------------------------------------------------------------------------
+
+model OauthApplication {
   id           String   @id @default(cuid())
-  userId       String   @unique
-  user         User     @relation(fields: [userId], references: [id])
-  
-  refreshToken String
+  name         String?
+  icon         String?
+  metadata     String?
+  clientId     String?  @unique
+  clientSecret String?
+  redirectUrls String?
+  type         String?
+  disabled     Boolean? @default(false)
+  userId       String?
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 }
 
-model AccountAssociation {
-  id         String   @id @default(cuid())
-  userId     String
-  user       User     @relation(fields: [userId], references: [id])
-  
-  customerId String   // Google Ads Customer ID
-  isDefault  Boolean  @default(false)
-  createdAt  DateTime @default(now())
+model OauthAccessToken {
+  id                    String    @id @default(cuid())
+  accessToken           String?   @unique
+  refreshToken          String?   @unique
+  accessTokenExpiresAt  DateTime?
+  refreshTokenExpiresAt DateTime?
+  clientId              String?
+  userId                String?
+  scopes                String?
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
+}
 
-  @@unique([userId, customerId])
+model OauthConsent {
+  id           String   @id @default(cuid())
+  clientId     String?
+  userId       String?
+  scopes       String?
+  consentGiven Boolean? @default(false)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+}
+
+// ----------------------------------------------------------------------------
+// Domain — Google Ads connections, per-employee account grants, audit trail
+// ----------------------------------------------------------------------------
+
+enum AccessLevel {
+  READ
+  WRITE
+  ADMIN
+}
+
+/// One linked Google Ads identity = one MCC + its encrypted refresh token.
+/// Owned by the member (employee) who linked it; the agency admin owns the
+/// agency MCC connection that is parent of the employee MCCs.
+model GoogleAdsConnection {
+  id             String       @id @default(cuid())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  ownerMemberId  String
+  owner          Member       @relation("ConnectionOwner", fields: [ownerMemberId], references: [id], onDelete: Cascade)
+
+  label           String
+  /// The MCC customer id used as login_customer_id (digits only, no dashes).
+  mccCustomerId   String
+  /// Google OAuth refresh token, encrypted at rest (see src/services/crypto.ts).
+  refreshTokenEnc String
+  isAgencyRoot    Boolean      @default(false)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  grants AccountGrant[]
+
+  @@unique([organizationId, mccCustomerId])
+  @@index([ownerMemberId])
+}
+
+/// Which client accounts a member may act on, and at what level, via a
+/// specific connection. Absence of a grant = no access.
+model AccountGrant {
+  id           String              @id @default(cuid())
+  memberId     String
+  member       Member              @relation(fields: [memberId], references: [id], onDelete: Cascade)
+  connectionId String
+  connection   GoogleAdsConnection @relation(fields: [connectionId], references: [id], onDelete: Cascade)
+  /// Client account customer id (digits only, no dashes).
+  customerId   String
+  accessLevel  AccessLevel         @default(READ)
+  createdAt    DateTime            @default(now())
+
+  @@unique([memberId, connectionId, customerId])
+  @@index([connectionId])
+  @@index([customerId])
+}
+
+/// Append-only audit trail. Every tool invocation that touches an account is
+/// recorded with who/what/when. argsSummary holds a redacted snapshot only.
+/// Append-only: NOT a FK relation to Organization, so deleting an org never
+/// cascades away its audit history. organizationId is a plain reference.
+model AuditLog {
+  id             String       @id @default(cuid())
+  organizationId String
+  memberId       String?
+  userId         String?
+  tool           String
+  customerId     String?
+  outcome        String // "ok" | "error" | "denied"
+  errorKind      String?
+  argsSummary    Json?
+  createdAt      DateTime     @default(now())
+
+  @@index([organizationId, createdAt])
+  @@index([customerId, createdAt])
 }

@@ -1,19 +1,10 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
-import { getCustomer } from "../services/google-ads/client";
-import { runMutation } from "../services/google-ads/mutator";
-import { runQuery } from "./runQuery";
-const BaseSchema = z.object({
-    customerId: z.string().describe("The Google Ads Customer ID"),
-    userId: z.string().optional().describe("SaaS User ID"),
-});
-function chunk<T>(items: T[], size: number): T[][] {
-    const chunks: T[][] = [];
-    for (let i = 0; i < items.length; i += size) {
-        chunks.push(items.slice(i, i + size));
-    }
-    return chunks;
-}
+import { getCustomer } from "../services/google-ads/client.js";
+import { runMutation } from "../services/google-ads/mutator.js";
+import { runQuery } from "./runQuery.js";
+import { asTool } from "./_runtime.js";
+import { BaseSchema, chunk } from "./_schemas.js";
 function normalizeStatus(raw: unknown, fallback: "ENABLED" | "PAUSED" = "PAUSED"): "ENABLED" | "PAUSED" {
     if (raw === "ENABLED" || Number(raw) === 2)
         return "ENABLED";
@@ -169,28 +160,6 @@ async function cloneAdGroup(args: z.infer<typeof CloneAdGroupSchema>) {
         targetCampaignId,
         keywordsCopied: keywordOps.length,
     };
-}
-async function asTool(fn: (args: any) => Promise<any>, args: any): Promise<{
-    content: [
-        {
-            type: "text";
-            text: string;
-        }
-    ];
-    isError?: true;
-}> {
-    try {
-        const result = await fn(args);
-        return {
-            content: [{ type: "text" as const, text: JSON.stringify(result, null, 2) }],
-        };
-    }
-    catch (error: any) {
-        return {
-            content: [{ type: "text" as const, text: `Error: ${error.message}` }],
-            isError: true,
-        };
-    }
 }
 export function registerAdGroupAdvancedTools(server: McpServer) {
     server.registerTool("create_ad_group", { description: "Create a new ad group.", inputSchema: CreateAdGroupSchema.shape }, args => asTool(createAdGroup, args));

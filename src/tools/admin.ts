@@ -1,40 +1,23 @@
 import { z } from "zod";
-import prisma from "../services/db";
-import logger from "../observability/logger";
+import prisma, { getUserStatusData } from "../services/db.js";
 
-const UserIdSchema = z.object({
-  userId: z.string().describe("SaaS User ID"),
+const TargetUserSchema = z.object({
+  targetUserId: z.string().describe("ID of the user to inspect (admin only)."),
 });
 
-export const GetUserStatusToolSchema = UserIdSchema;
-export async function getUserStatus(args: z.infer<typeof UserIdSchema>) {
-  const { userId } = args;
-  
-  const user = await prisma.user.findUnique({
-    where: { id: userId },
-    include: {
-      credentials: true,
-      accounts: true,
-    }
-  });
+export const GetUserStatusToolSchema = TargetUserSchema;
 
-  if (!user) {
-    throw new Error(`User ${userId} not found.`);
+/** Report a user's org memberships, owned connections (MCCs) and account grants. */
+export async function getUserStatus(args: z.infer<typeof TargetUserSchema>) {
+  const status = await getUserStatusData(args.targetUserId);
+  if (!status) {
+    throw new Error(`User ${args.targetUserId} not found.`);
   }
-
-  return {
-    id: user.id,
-    email: user.email,
-    name: user.name,
-    isConnected: !!user.credentials,
-    linkedAccounts: user.accounts.map(a => a.customerId),
-    selectedAccounts: user.accounts.filter(a => a.isDefault).map(a => a.customerId),
-  };
+  return status;
 }
 
-const ListAllUsersSchema = z.object({}); // For admin debugging
 export async function listUsers() {
-    return prisma.user.findMany({
-        select: { id: true, email: true, name: true }
-    });
+  return prisma.user.findMany({
+    select: { id: true, email: true, name: true },
+  });
 }

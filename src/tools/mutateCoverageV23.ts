@@ -1,13 +1,12 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
-import { getCustomer } from "../services/google-ads/client";
-import { runMutation } from "../services/google-ads/mutator";
-import { runQuery } from "./runQuery";
-
-const BaseSchema = z.object({
-  customerId: z.string().describe("The Google Ads Customer ID"),
-  userId: z.string().optional().describe("SaaS User ID"),
-});
+import { getCustomer } from "../services/google-ads/client.js";
+import { runMutation } from "../services/google-ads/mutator.js";
+import { runQuery } from "./runQuery.js";
+import { assertSafeGaqlFragment } from "../policies/gaql.js";
+import { toErrorMessage } from "../observability/errorMessage.js";
+import { BaseSchema } from "./_schemas.js";
+import { escapeGaqlString } from "../services/google-ads/resourceNames.js";
 
 const ListResourceSchema = BaseSchema.extend({
   limit: z.number().int().min(1).max(1000).default(100),
@@ -140,9 +139,6 @@ export const MUTATE_COVERAGE_V23_EXPECTED_TOOL_NAMES: string[] = COVERAGE_FAMILI
   buildExpectedToolNames
 );
 
-function escapeGaqlString(value: string): string {
-  return value.replace(/\\/g, "\\\\").replace(/'/g, "\\'");
-}
 
 function isVerbRegistered(config: FamilyConfig, verb: MutateVerb): boolean {
   if (!config.supports.includes(verb)) {
@@ -155,6 +151,8 @@ function isVerbRegistered(config: FamilyConfig, verb: MutateVerb): boolean {
 }
 
 async function listFamilyResources(resource: string, args: z.infer<typeof ListResourceSchema>) {
+  assertSafeGaqlFragment(args.where, "where");
+  assertSafeGaqlFragment(args.orderBy, "orderBy");
   const whereClause = args.where ? `WHERE ${args.where}` : "";
   const orderClause = args.orderBy ? `ORDER BY ${args.orderBy}` : `ORDER BY ${resource}.resource_name`;
 
@@ -250,9 +248,9 @@ async function asTool(handler: () => Promise<unknown>): Promise<{
     return {
       content: [{ type: "text" as const, text: JSON.stringify(result, null, 2) }],
     };
-  } catch (error: any) {
+  } catch (error) {
     return {
-      content: [{ type: "text" as const, text: `Error: ${error.message}` }],
+      content: [{ type: "text" as const, text: `Error: ${toErrorMessage(error)}` }],
       isError: true,
     };
   }

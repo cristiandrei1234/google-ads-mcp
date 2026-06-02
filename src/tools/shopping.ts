@@ -1,6 +1,6 @@
 import { z } from "zod";
-import { getCustomer } from "../services/google-ads/client";
-import logger from "../observability/logger";
+import { getCustomer } from "../services/google-ads/client.js";
+import logger from "../observability/logger.js";
 
 // --- Shopping Performance ---
 
@@ -60,7 +60,7 @@ export async function listShoppingPerformance(args: z.infer<typeof ListShoppingP
 
 const ListListingGroupsSchema = z.object({
   customerId: z.string().describe("The Google Ads Customer ID"),
-  adGroupId: z.string().optional().describe("Filter by Ad Group ID"),
+  adGroupId: z.string().regex(/^\d+$/, "adGroupId must be numeric").optional().describe("Filter by Ad Group ID"),
   userId: z.string().optional().describe("SaaS User ID"),
 });
 
@@ -94,7 +94,7 @@ export async function listListingGroups(args: z.infer<typeof ListListingGroupsSc
 
 const ListAssetGroupListingGroupsSchema = z.object({
   customerId: z.string().describe("The Google Ads Customer ID"),
-  assetGroupId: z.string().optional().describe("Filter by Asset Group ID"),
+  assetGroupId: z.string().regex(/^\d+$/, "assetGroupId must be numeric").optional().describe("Filter by Asset Group ID"),
   userId: z.string().optional().describe("SaaS User ID"),
 });
 

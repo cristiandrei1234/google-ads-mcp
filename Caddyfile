@@ -1,0 +1,11 @@
+# Caddy fronts the MCP HTTP server and terminates TLS (auto Let's Encrypt).
+# Requires ports 80/443 reachable and DNS for $DOMAIN pointing at this host.
+{$DOMAIN} {
+	encode zstd gzip
+
+	# MCP uses Server-Sent Events on GET /mcp — disable response buffering so
+	# the stream is flushed to the client immediately.
+	reverse_proxy mcp:3000 {
+		flush_interval -1
+	}
+}

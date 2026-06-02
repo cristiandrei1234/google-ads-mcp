@@ -1,0 +1,84 @@
+name: CI
+
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_DB: google_ads_mcp
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d google_ads_mcp"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+
+    env:
+      DATABASE_URL: postgresql://postgres:postgres@localhost:5432/google_ads_mcp?schema=public
+      BETTER_AUTH_URL: http://localhost:3939
+      PORT: "3939"
+      # Non-secret CI placeholders (no live Google calls are made in CI).
+      GOOGLE_ADS_CLIENT_ID: ci-client-id
+      GOOGLE_ADS_CLIENT_SECRET: ci-client-secret
+      GOOGLE_ADS_DEVELOPER_TOKEN: ci-developer-token
+      LOG_LEVEL: warn
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+
+      - name: Generate test secrets
+        run: |
+          echo "TOKEN_ENCRYPTION_KEY=$(openssl rand -base64 32)" >> "$GITHUB_ENV"
+          echo "BETTER_AUTH_SECRET=$(openssl rand -base64 32)" >> "$GITHUB_ENV"
+
+      - run: npx prisma generate
+
+      - name: Apply migrations
+        run: npx prisma migrate deploy
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Unit tests + 100% coverage gate
+        run: npm run coverage
+
+      - name: Build
+        run: npm run build
+
+      - name: Data-layer smoke
+        run: npx tsx scripts/smoke-db.ts
+
+      - name: Better Auth smoke
+        run: npx tsx scripts/smoke-auth.ts
+
+      - name: Identity / authz smoke
+        run: npx tsx scripts/smoke-identity.ts
+
+      - name: HTTP end-to-end smoke
+        run: |
+          node dist/server/http.js &
+          SERVER_PID=$!
+          for i in $(seq 1 30); do
+            if curl -sf http://localhost:3939/healthz >/dev/null; then echo "server ready"; break; fi
+            sleep 1
+          done
+          npx tsx scripts/smoke-http.ts
+          kill $SERVER_PID

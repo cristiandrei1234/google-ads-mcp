@@ -1,13 +1,12 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
-import { getCustomer } from "../services/google-ads/client";
-import { runMutation } from "../services/google-ads/mutator";
-import { runQuery } from "./runQuery";
+import { getCustomer } from "../services/google-ads/client.js";
+import { runMutation } from "../services/google-ads/mutator.js";
+import { runQuery } from "./runQuery.js";
+import { asTool } from "./_runtime.js";
+import { BaseSchema } from "./_schemas.js";
+import { normalizeCustomerId, extractResourceId, normalizeNumericId, toResourceName } from "../services/google-ads/resourceNames.js";
 
-const BaseSchema = z.object({
-  customerId: z.string().describe("The Google Ads Customer ID"),
-  userId: z.string().optional().describe("SaaS User ID"),
-});
 
 const DeviceEnumSchema = z.enum([
   "MOBILE",
@@ -17,57 +16,23 @@ const DeviceEnumSchema = z.enum([
   "OTHER",
 ]);
 
-function normalizeCustomerId(customerId: string): string {
-  return customerId.replace(/-/g, "");
-}
 
-function extractResourceId(value: string, collection: string): string {
-  const match = value.trim().match(new RegExp(`/${collection}/([^/]+)$`));
-  return match?.[1] || value.trim();
-}
 
-function normalizeNumericId(value: string, collection: string): string {
-  const normalized = extractResourceId(value, collection).replace(/[^0-9]/g, "");
-  if (!normalized) {
-    throw new Error(`Invalid ${collection} identifier: ${value}`);
-  }
-  return normalized;
-}
 
 function toCampaignResourceName(customerId: string, campaignIdOrResourceName: string): string {
-  if (campaignIdOrResourceName.startsWith("customers/")) {
-    return campaignIdOrResourceName;
-  }
-  const normalizedCustomerId = normalizeCustomerId(customerId);
-  const campaignId = normalizeNumericId(campaignIdOrResourceName, "campaigns");
-  return `customers/${normalizedCustomerId}/campaigns/${campaignId}`;
+  return toResourceName(customerId, campaignIdOrResourceName, "campaigns");
 }
 
 function toBiddingStrategyResourceName(customerId: string, biddingStrategyIdOrResourceName: string): string {
-  if (biddingStrategyIdOrResourceName.startsWith("customers/")) {
-    return biddingStrategyIdOrResourceName;
-  }
-  const normalizedCustomerId = normalizeCustomerId(customerId);
-  const biddingStrategyId = normalizeNumericId(biddingStrategyIdOrResourceName, "biddingStrategies");
-  return `customers/${normalizedCustomerId}/biddingStrategies/${biddingStrategyId}`;
+  return toResourceName(customerId, biddingStrategyIdOrResourceName, "biddingStrategies");
 }
 
 function toSeasonalityAdjustmentResourceName(customerId: string, idOrResourceName: string): string {
-  if (idOrResourceName.startsWith("customers/")) {
-    return idOrResourceName;
-  }
-  const normalizedCustomerId = normalizeCustomerId(customerId);
-  const id = normalizeNumericId(idOrResourceName, "biddingSeasonalityAdjustments");
-  return `customers/${normalizedCustomerId}/biddingSeasonalityAdjustments/${id}`;
+  return toResourceName(customerId, idOrResourceName, "biddingSeasonalityAdjustments");
 }
 
 function toDataExclusionResourceName(customerId: string, idOrResourceName: string): string {
-  if (idOrResourceName.startsWith("customers/")) {
-    return idOrResourceName;
-  }
-  const normalizedCustomerId = normalizeCustomerId(customerId);
-  const id = normalizeNumericId(idOrResourceName, "biddingDataExclusions");
-  return `customers/${normalizedCustomerId}/biddingDataExclusions/${id}`;
+  return toResourceName(customerId, idOrResourceName, "biddingDataExclusions");
 }
 
 function mapCampaignIdsToResourceNames(customerId: string, campaignIds?: string[]): string[] | undefined {
@@ -697,22 +662,6 @@ async function removeBiddingDataExclusion(args: z.infer<typeof RemoveBiddingData
   ]);
 }
 
-async function asTool(fn: (args: any) => Promise<any>, args: any): Promise<{
-  content: [{ type: "text"; text: string }];
-  isError?: true;
-}> {
-  try {
-    const result = await fn(args);
-    return {
-      content: [{ type: "text" as const, text: JSON.stringify(result, null, 2) }],
-    };
-  } catch (error: any) {
-    return {
-      content: [{ type: "text" as const, text: `Error: ${error.message}` }],
-      isError: true,
-    };
-  }
-}
 
 export function registerBiddingAdvancedTools(server: McpServer) {
   server.registerTool(

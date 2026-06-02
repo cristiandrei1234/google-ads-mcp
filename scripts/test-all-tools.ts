@@ -1,43 +1,43 @@
 import dotenv from "dotenv";
 import fs from "node:fs";
 import path from "node:path";
-import { getUserStatus } from "../src/tools/admin";
-import { pauseAdGroup, enableAdGroup, removeAdGroup } from "../src/tools/adgroups";
-import { createResponsiveSearchAd, pauseAd, enableAd, removeAd } from "../src/tools/ads";
-import { createTextAsset, createImageAsset, listAssets } from "../src/tools/assets";
-import { createUserList, listUserLists } from "../src/tools/audiences";
-import { createBatchJob, listBatchJobs, addBatchJobOperations, runBatchJob } from "../src/tools/batchJobs";
-import { listInvoices, listAccountBudgets, listBillingSetups } from "../src/tools/billing";
-import { pauseCampaign, enableCampaign, removeCampaign } from "../src/tools/campaigns";
-import { createConversionAction, listConversionActions, uploadClickConversion } from "../src/tools/conversions";
-import { listExperiments, createExperiment, listReachPlanLocations, generateReachForecast } from "../src/tools/experiments";
-import { startIdentityVerification, getIdentityVerification } from "../src/tools/identityVerification";
-import { generateKeywordIdeas } from "../src/tools/keywordPlanner";
-import { addKeyword, pauseKeyword, enableKeyword, removeKeyword } from "../src/tools/keywords";
-import { listAccounts } from "../src/tools/listAccounts";
-import { listLocalServicesLeads } from "../src/tools/localServices";
-import { listProducts, getProduct, insertProduct, deleteProduct } from "../src/tools/merchantCenter";
-import { linkMerchantCenter, listMerchantCenterLinks, unlinkMerchantCenter } from "../src/tools/merchantLinking";
+import { getUserStatus } from "../src/tools/admin.js";
+import { pauseAdGroup, enableAdGroup, removeAdGroup } from "../src/tools/adgroups.js";
+import { createResponsiveSearchAd, pauseAd, enableAd, removeAd } from "../src/tools/ads.js";
+import { createTextAsset, createImageAsset, listAssets } from "../src/tools/assets.js";
+import { createUserList, listUserLists } from "../src/tools/audiences.js";
+import { createBatchJob, listBatchJobs, addBatchJobOperations, runBatchJob } from "../src/tools/batchJobs.js";
+import { listInvoices, listAccountBudgets, listBillingSetups } from "../src/tools/billing.js";
+import { pauseCampaign, enableCampaign, removeCampaign } from "../src/tools/campaigns.js";
+import { createConversionAction, listConversionActions, uploadClickConversion } from "../src/tools/conversions.js";
+import { listExperiments, createExperiment, listReachPlanLocations, generateReachForecast } from "../src/tools/experiments.js";
+import { startIdentityVerification, getIdentityVerification } from "../src/tools/identityVerification.js";
+import { generateKeywordIdeas } from "../src/tools/keywordPlanner.js";
+import { addKeyword, pauseKeyword, enableKeyword, removeKeyword } from "../src/tools/keywords.js";
+import { listAccounts } from "../src/tools/listAccounts.js";
+import { listLocalServicesLeads } from "../src/tools/localServices.js";
+import { listProducts, getProduct, insertProduct, deleteProduct } from "../src/tools/merchantCenter.js";
+import { linkMerchantCenter, listMerchantCenterLinks, unlinkMerchantCenter } from "../src/tools/merchantLinking.js";
 import {
   addAdGroupNegativeKeyword,
   removeAdGroupNegativeKeyword,
   addCampaignNegativeKeyword,
   removeCampaignNegativeKeyword,
-} from "../src/tools/negativeKeywords";
-import { listPolicyFindings } from "../src/tools/policy";
-import { listRecommendations, applyRecommendation, dismissRecommendation } from "../src/tools/recommendations";
-import { getSearchTerms, getChangeHistory } from "../src/tools/reporting";
-import { runQuery } from "../src/tools/runQuery";
+} from "../src/tools/negativeKeywords.js";
+import { listPolicyFindings } from "../src/tools/policy.js";
+import { listRecommendations, applyRecommendation, dismissRecommendation } from "../src/tools/recommendations.js";
+import { getSearchTerms, getChangeHistory } from "../src/tools/reporting.js";
+import { runQuery } from "../src/tools/runQuery.js";
 import {
   listShoppingPerformance,
   listListingGroups,
   listAssetGroupListingGroups,
-} from "../src/tools/shopping";
-import { listAudienceInsights, listHotelPerformance } from "../src/tools/verticals";
-import { MUTATE_COVERAGE_V23_EXPECTED_TOOL_NAMES } from "../src/tools/mutateCoverageV23";
-import { registerMutateCoverageV23Tools } from "../src/tools/mutateCoverageV23";
-import { READ_PARITY_EXPECTED_TOOL_NAMES } from "../src/tools/readParity";
-import { registerReadParityTools } from "../src/tools/readParity";
+} from "../src/tools/shopping.js";
+import { listAudienceInsights, listHotelPerformance } from "../src/tools/verticals.js";
+import { MUTATE_COVERAGE_V23_EXPECTED_TOOL_NAMES } from "../src/tools/mutateCoverageV23.js";
+import { registerMutateCoverageV23Tools } from "../src/tools/mutateCoverageV23.js";
+import { READ_PARITY_EXPECTED_TOOL_NAMES } from "../src/tools/readParity.js";
+import { registerReadParityTools } from "../src/tools/readParity.js";
 
 dotenv.config();
 

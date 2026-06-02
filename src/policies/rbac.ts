@@ -1,51 +1,74 @@
-import { z } from "zod";
-import config from "../config/env";
-import logger from "../observability/logger";
+import type { AuthContext } from "../auth/identityContext.js";
 
-// A simple RBAC model
-export enum Permission {
-  READ = "read",
-  WRITE = "write",
-  ADMIN = "admin",
+/**
+ * Identity-based authorization. Two layers protect an operation:
+ *   1. ROLE gate (here): can this employee run write/admin tools at all.
+ *   2. ACCOUNT gate (services/db.ts getConnectionForCustomer + getGrantLevel):
+ *      does the employee hold a (sufficient) AccountGrant for the customerId.
+ *
+ * Write-vs-read is decided by DEFAULT-DENY, not by a name prefix: a tool is a
+ * read ONLY if it is explicitly known to be read-only; everything else is
+ * treated as a write (so a mutating tool can never slip through the grant gate
+ * just because its name doesn't start with create_/update_/remove_).
+ */
+
+const ADMIN_ROLES: ReadonlySet<string> = new Set(["owner", "admin"]);
+/** Roles permitted to run write tools. Anything else (incl. null/empty) is read-only. */
+const WRITE_CAPABLE_ROLES: ReadonlySet<string> = new Set(["owner", "admin", "member"]);
+
+/** Tools that expose org-wide administrative data and require an admin role. */
+const ADMIN_ONLY_TOOLS: ReadonlySet<string> = new Set(["get_user_status", "list_users"]);
+
+/** Read-only tool name prefixes. */
+const READ_ONLY_PREFIX = /^(list_|get_)/;
+/** Read-only tools that do not match the prefix convention. */
+const READ_ONLY_EXTRA: ReadonlySet<string> = new Set([
+  "run_gaql_query",
+  "generate_keyword_ideas",
+  "generate_reach_forecast",
+]);
+
+export function isReadOnlyTool(toolName: string): boolean {
+  return READ_ONLY_PREFIX.test(toolName) || READ_ONLY_EXTRA.has(toolName);
 }
 
-export const PolicySchema = z.object({
-  allowedCustomers: z.array(z.string()).optional(), // If empty, all accessible are allowed
-  allowedTools: z.array(z.string()).optional(), // If empty, all tools are allowed
-  role: z.enum(["read", "write", "admin"]).default("write"),
-});
+/** DEFAULT-DENY: anything not explicitly read-only is treated as a write. */
+export function isWriteTool(toolName: string): boolean {
+  return !isReadOnlyTool(toolName);
+}
 
-export type Policy = z.infer<typeof PolicySchema>;
+export interface AuthzVerdict {
+  allowed: boolean;
+  reason?: string;
+}
 
-// In a real scenario, this would load from a database or config file per user/tenant
-const defaultPolicy: Policy = {
-  role: "write", // Defaulting to write for single-user CLI
-};
-
-export function checkPermission(toolName: string, customerId?: string): boolean {
-  // 1. Check Role vs Tool Type (Convention: read tools start with list/get, write with create/update/remove)
-  const isWriteTool = /^(create|update|remove|add|pause|enable|upload|link|unlink|run|apply|dismiss|insert|delete)/.test(toolName);
-  
-  if (isWriteTool && defaultPolicy.role === "read") {
-    logger.warn(`Access denied for tool ${toolName}: Write permission required.`);
-    return false;
+/**
+ * Decide whether the authenticated caller may invoke a tool (role layer only).
+ *
+ * @param authCtx The resolved identity, or undefined for single-operator/stdio
+ *   mode (no multi-tenant identity → allowed; account access still gated by env).
+ * @param toolName The MCP tool being invoked.
+ */
+export function can(authCtx: AuthContext | undefined, toolName: string): AuthzVerdict {
+  // Single-operator / stdio mode: no authenticated identity. Account access is
+  // still controlled by env credentials in getCustomer.
+  if (!authCtx) {
+    return { allowed: true };
   }
 
-  // 2. Check Customer Access
-  if (customerId && defaultPolicy.allowedCustomers && defaultPolicy.allowedCustomers.length > 0) {
-    if (!defaultPolicy.allowedCustomers.includes(customerId)) {
-      logger.warn(`Access denied for customer ${customerId}: Not in allowlist.`);
-      return false;
-    }
+  const role = authCtx.role ?? "";
+
+  if (ADMIN_ONLY_TOOLS.has(toolName) && !ADMIN_ROLES.has(role)) {
+    return { allowed: false, reason: `Tool '${toolName}' requires an organization admin role.` };
   }
 
-  // 3. Check Tool Allowlist
-  if (defaultPolicy.allowedTools && defaultPolicy.allowedTools.length > 0) {
-    if (!defaultPolicy.allowedTools.includes(toolName)) {
-      logger.warn(`Access denied for tool ${toolName}: Not in allowlist.`);
-      return false;
-    }
+  // Fail closed: writes require an explicitly write-capable role.
+  if (isWriteTool(toolName) && !WRITE_CAPABLE_ROLES.has(role)) {
+    return {
+      allowed: false,
+      reason: `Role '${role || "none"}' may not run write tool '${toolName}'.`,
+    };
   }
 
-  return true;
+  return { allowed: true };
 }

@@ -1,19 +1,19 @@
 import { z } from "zod";
-import { getClient, getCustomer } from "../services/google-ads/client";
-import logger from "../observability/logger";
-import config from "../config/env";
-import { associateAccount, getUserAccounts, getUserCredentials } from "../services/db";
+import { getClient } from "../services/google-ads/client.js";
+import logger from "../observability/logger.js";
+import config from "../config/env.js";
+import { listConnectionsForUser, reachableCustomerIds } from "../services/db.js";
+import { getIdentity } from "../auth/identityContext.js";
 
-export const ListAccountsSchema = z.object({
-  userId: z.string().optional().describe("SaaS User ID to list accounts for"),
-});
+export const ListAccountsSchema = z.object({});
 
 function normalizeCustomerId(raw: string): string {
   const extracted = raw.includes("/") ? raw.split("/").pop() || raw : raw;
   return extracted.replace(/-/g, "");
 }
 
-async function discoverAccountsFromGoogleAds(refreshToken: string, userId?: string): Promise<string[]> {
+/** Discover Google-accessible customers (with first-level manager children). */
+async function discoverAccountsFromGoogleAds(refreshToken: string): Promise<string[]> {
   const client = getClient();
   const discoveredCustomerIds = new Set<string>();
   const discovery = await client.listAccessibleCustomers(refreshToken);
@@ -21,11 +21,7 @@ async function discoverAccountsFromGoogleAds(refreshToken: string, userId?: stri
   for (const resourceName of discovery.resource_names || []) {
     const customerId = normalizeCustomerId(resourceName);
     if (!customerId) continue;
-
     discoveredCustomerIds.add(customerId);
-    if (userId) {
-      await associateAccount(userId, customerId);
-    }
 
     // Expand manager accounts into first-level enabled children.
     try {
@@ -35,34 +31,22 @@ async function discoverAccountsFromGoogleAds(refreshToken: string, userId?: stri
         login_customer_id: customerId,
       });
 
-      const managerCheck = await managerCandidate.query(`
-        SELECT customer.manager
-        FROM customer
-        LIMIT 1
-      `);
+      const managerCheck = await managerCandidate.query(
+        `SELECT customer.manager FROM customer LIMIT 1`
+      );
       const isManager = Boolean(managerCheck?.[0]?.customer?.manager);
-      if (!isManager) {
-        continue;
-      }
+      if (!isManager) continue;
 
-      const childRows = await managerCandidate.query(`
-        SELECT customer_client.id
-        FROM customer_client
-        WHERE customer_client.level = 1
-      `);
-
+      const childRows = await managerCandidate.query(
+        `SELECT customer_client.id FROM customer_client WHERE customer_client.level = 1`
+      );
       for (const row of childRows) {
         const childId = String(row?.customer_client?.id || "").trim();
-        if (!childId) continue;
-
-        discoveredCustomerIds.add(childId);
-        if (userId) {
-          await associateAccount(userId, childId);
-        }
+        if (childId) discoveredCustomerIds.add(childId);
       }
     } catch (childDiscoveryError: any) {
       logger.warn(
-        { err: childDiscoveryError, managerCustomerId: customerId, userId },
+        { err: childDiscoveryError, managerCustomerId: customerId },
         "Skipping manager child-account discovery during listAccounts"
       );
     }
@@ -70,57 +54,52 @@ async function discoverAccountsFromGoogleAds(refreshToken: string, userId?: stri
 
   return Array.from(discoveredCustomerIds)
     .sort()
-    .map(id => `customers/${id}`);
+    .map((id) => `customers/${id}`);
 }
 
-export async function listAccounts(args: z.infer<typeof ListAccountsSchema> = {}) {
-  const { userId } = args;
+/**
+ * List accessible Google Ads accounts.
+ *
+ * - userId mode: discover via the user's connection refresh token(s); on
+ *   failure, fall back to the accounts the user has been granted.
+ * - env mode: discover via GOOGLE_ADS_REFRESH_TOKEN.
+ */
+export async function listAccounts(_args: z.infer<typeof ListAccountsSchema> = {}) {
+  // Identity comes from the authenticated session (multi-tenant) or env (stdio).
+  const userId = getIdentity()?.userId;
   logger.info(`Listing accessible accounts${userId ? ` for user ${userId}` : ""}`);
 
-  const linkedAccounts = userId ? await getUserAccounts(userId) : [];
-  
-  // 1. Get Refresh Token
-  let refreshToken = config.GOOGLE_ADS_REFRESH_TOKEN;
   if (userId) {
-    const creds = await getUserCredentials(userId);
-    if (!creds) {
-      throw new Error(`No credentials found for user ${userId}`);
+    const orgId = getIdentity()?.orgId;
+    // Grants are the authoritative scope. Discovery may only NARROW this set,
+    // never reveal accounts the user has no grant for.
+    const granted = new Set(await reachableCustomerIds(userId, orgId));
+    const connections = await listConnectionsForUser(userId, orgId);
+    const discovered = new Set<string>();
+    for (const connection of connections) {
+      try {
+        for (const rn of await discoverAccountsFromGoogleAds(connection.refreshToken)) {
+          discovered.add(normalizeCustomerId(rn));
+        }
+      } catch (error: any) {
+        logger.warn(
+          { err: error, userId, connectionId: connection.connectionId },
+          "Account discovery failed for connection; using grants only"
+        );
+      }
     }
-    refreshToken = creds.refreshToken;
-  } else if (!refreshToken) {
+    const allowed = discovered.size > 0
+      ? [...granted].filter((id) => discovered.has(id))
+      : [...granted];
+    return allowed.sort().map((id) => `customers/${id}`);
+  }
+
+  const refreshToken = config.GOOGLE_ADS_REFRESH_TOKEN;
+  if (!refreshToken) {
     throw new Error(
       "GOOGLE_ADS_REFRESH_TOKEN is missing. " +
-      "Pass userId (dynamic OAuth mode) or configure single-user env credentials."
+      "Pass userId (multi-tenant mode) or configure single-operator env credentials."
     );
   }
-
-  try {
-    const discoveredAccounts = await discoverAccountsFromGoogleAds(refreshToken, userId);
-    if (discoveredAccounts.length > 0) {
-      return discoveredAccounts;
-    }
-  } catch (error: any) {
-    logger.warn(
-      { err: error, userId },
-      "Live Google Ads account discovery failed; falling back to cached linked accounts"
-    );
-    if (linkedAccounts.length > 0) {
-      return linkedAccounts.map(account => `customers/${account.customerId}`);
-    }
-
-    // Fallback logic...
-    if (config.GOOGLE_ADS_LOGIN_CUSTOMER_ID) {
-      const customer = await getCustomer(config.GOOGLE_ADS_LOGIN_CUSTOMER_ID, userId);
-      const query = `SELECT customer_client.id FROM customer_client WHERE customer_client.level <= 1`;
-      const results = await customer.query(query);
-      return results.map((r: any) => `customers/${r.customer_client.id}`);
-    }
-    throw error;
-  }
-
-  if (linkedAccounts.length > 0) {
-    return linkedAccounts.map(account => `customers/${account.customerId}`);
-  }
-
-  return [];
+  return discoverAccountsFromGoogleAds(refreshToken);
 }

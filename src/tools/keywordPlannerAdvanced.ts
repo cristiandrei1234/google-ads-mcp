@@ -1,10 +1,8 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
-import { getCustomer } from "../services/google-ads/client";
-const BaseSchema = z.object({
-    customerId: z.string().describe("The Google Ads Customer ID"),
-    userId: z.string().optional().describe("SaaS User ID"),
-});
+import { getCustomer } from "../services/google-ads/client.js";
+import { asTool } from "./_runtime.js";
+import { BaseSchema } from "./_schemas.js";
 const MatchTypeSchema = z.enum(["BROAD", "PHRASE", "EXACT"]);
 const GenerateKeywordHistoricalMetricsSchema = BaseSchema.extend({
     keywords: z.array(z.string()).min(1),
@@ -167,23 +165,6 @@ async function addKeywordPlanKeywords(args: z.infer<typeof AddKeywordPlanKeyword
         ...(keyword.cpcBidMicros ? { cpc_bid_micros: keyword.cpcBidMicros } : {}),
         negative: keyword.negative,
     })));
-}
-async function asTool(fn: (args: any) => Promise<any>, args: any): Promise<{
-    content: [
-        {
-            type: "text";
-            text: string;
-        }
-    ];
-    isError?: true;
-}> {
-    try {
-        const result = await fn(args);
-        return { content: [{ type: "text" as const, text: JSON.stringify(result, null, 2) }] };
-    }
-    catch (error: any) {
-        return { content: [{ type: "text" as const, text: `Error: ${error.message}` }], isError: true };
-    }
 }
 export function registerKeywordPlannerAdvancedTools(server: McpServer) {
     server.registerTool("generate_keyword_historical_metrics", { description: "Generate Keyword Planner historical metrics.", inputSchema: GenerateKeywordHistoricalMetricsSchema.shape }, args => asTool(generateKeywordHistoricalMetrics, args));

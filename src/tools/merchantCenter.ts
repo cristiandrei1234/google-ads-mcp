@@ -1,11 +1,13 @@
 import { z } from "zod";
-import { getContentService } from "../services/merchant-center/client";
-import logger from "../observability/logger";
-import config from "../config/env";
+import { getContentService } from "../services/merchant-center/client.js";
+import logger from "../observability/logger.js";
+import config from "../config/env.js";
 
 const MerchantIdSchema = z.object({
+  customerId: z
+    .string()
+    .describe("Google Ads customer ID you hold a grant for (authorizes Merchant Center access)."),
   merchantId: z.string().describe("The Merchant Center Account ID"),
-  userId: z.string().optional().describe("SaaS User ID"),
 });
 
 export const ListProductsSchema = MerchantIdSchema.extend({
@@ -13,7 +15,7 @@ export const ListProductsSchema = MerchantIdSchema.extend({
 });
 
 export async function listProducts(args: z.infer<typeof ListProductsSchema>) {
-  const service = await getContentService(args.userId);
+  const service = await getContentService(args.customerId);
   const merchantId = args.merchantId || config.MERCHANT_CENTER_ID;
 
   if (!merchantId) {
@@ -39,7 +41,7 @@ export const GetProductSchema = MerchantIdSchema.extend({
 });
 
 export async function getProduct(args: z.infer<typeof GetProductSchema>) {
-  const service = await getContentService(args.userId);
+  const service = await getContentService(args.customerId);
   const merchantId = args.merchantId || config.MERCHANT_CENTER_ID;
 
   if (!merchantId) {
@@ -77,7 +79,7 @@ export const InsertProductSchema = MerchantIdSchema.extend({
 });
 
 export async function insertProduct(args: z.infer<typeof InsertProductSchema>) {
-  const service = await getContentService(args.userId);
+  const service = await getContentService(args.customerId);
   const merchantId = args.merchantId || config.MERCHANT_CENTER_ID;
 
   if (!merchantId) {
@@ -118,7 +120,7 @@ export const DeleteProductSchema = MerchantIdSchema.extend({
 });
 
 export async function deleteProduct(args: z.infer<typeof DeleteProductSchema>) {
-  const service = await getContentService(args.userId);
+  const service = await getContentService(args.customerId);
   const merchantId = args.merchantId || config.MERCHANT_CENTER_ID;
 
   if (!merchantId) {

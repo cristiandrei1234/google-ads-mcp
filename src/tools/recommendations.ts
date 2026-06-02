@@ -1,8 +1,8 @@
 import { z } from "zod";
-import { getCustomer } from "../services/google-ads/client";
-import { runMutation } from "../services/google-ads/mutator";
-import logger from "../observability/logger";
-import { toErrorMessage } from "../observability/errorMessage";
+import { getCustomer } from "../services/google-ads/client.js";
+import { runMutation } from "../services/google-ads/mutator.js";
+import logger from "../observability/logger.js";
+import { toErrorMessage } from "../observability/errorMessage.js";
 
 const ListRecommendationsSchema = z.object({
   customerId: z.string().describe("The Google Ads Customer ID"),

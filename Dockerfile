@@ -36,4 +36,8 @@ RUN npm ci --omit=dev && npx prisma generate
 
 COPY --from=build /app/dist ./dist
 
-CMD ["sh", "-c", "npx prisma migrate deploy && node dist/index.js"]
+EXPOSE 3000
+
+# Production default: run the HTTP transport. (The stdio entry, dist/index.js,
+# is for local dev; docker-compose can override this command if needed.)
+CMD ["sh", "-c", "npx prisma migrate deploy && node dist/server/http.js"]

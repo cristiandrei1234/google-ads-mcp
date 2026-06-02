@@ -1,5 +1,5 @@
-// import { GoogleAdsClient } from "google-ads-api";
-import logger from "../../observability/logger";
+import config from "../../config/env.js";
+import logger from "../../observability/logger.js";
 
 interface MutateOptions {
   dryRun?: boolean;
@@ -64,9 +64,7 @@ export async function runMutation(
   mutations: any[],
   options: MutateOptions = { dryRun: false, partialFailure: false }
 ) {
-  const forceValidateOnly = ["1", "true", "yes"].includes(
-    (process.env.GOOGLE_ADS_VALIDATE_ONLY || "").toLowerCase()
-  );
+  const forceValidateOnly = config.GOOGLE_ADS_VALIDATE_ONLY;
   const validateOnly = options.dryRun || forceValidateOnly;
 
   logger.info(
@@ -84,6 +82,17 @@ export async function runMutation(
       partial_failure: options.partialFailure,
       validate_only: validateOnly,
     });
+
+    // With partial_failure=true the API does NOT throw on per-operation errors;
+    // it returns a populated partial_failure_error. Surface it instead of
+    // reporting silent success.
+    const partialFailureError = (result as any)?.partial_failure_error;
+    if (!validateOnly && options.partialFailure && partialFailureError) {
+      logger.error(`Mutation partial failure: ${JSON.stringify(partialFailureError)}`);
+      throw new Error(
+        `Mutation completed with partial failures: ${partialFailureError.message || JSON.stringify(partialFailureError)}`
+      );
+    }
     return result;
   } catch (error: any) {
     logger.error(`Mutation failed: ${error.message}`);

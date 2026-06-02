@@ -1,57 +1,22 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
-import { getCustomer } from "../services/google-ads/client";
-import { runMutation } from "../services/google-ads/mutator";
-import { runQuery } from "./runQuery";
-const BaseSchema = z.object({
-    customerId: z.string().describe("The Google Ads Customer ID"),
-    userId: z.string().optional().describe("SaaS User ID"),
-});
-function normalizeCustomerId(customerId: string): string {
-    return customerId.replace(/-/g, "");
-}
-function extractResourceId(value: string, collection: string): string {
-    const match = value.trim().match(new RegExp(`/${collection}/([^/]+)$`));
-    return match?.[1] || value.trim();
-}
-function normalizeNumericId(value: string, collection: string): string {
-    const normalized = extractResourceId(value, collection).replace(/[^0-9]/g, "");
-    if (!normalized) {
-        throw new Error(`Invalid ${collection} identifier: ${value}`);
-    }
-    return normalized;
-}
+import { getCustomer } from "../services/google-ads/client.js";
+import { runMutation } from "../services/google-ads/mutator.js";
+import { runQuery } from "./runQuery.js";
+import { asTool } from "./_runtime.js";
+import { BaseSchema } from "./_schemas.js";
+import { normalizeCustomerId, extractResourceId, normalizeNumericId, toResourceName } from "../services/google-ads/resourceNames.js";
 function toCampaignResourceName(customerId: string, campaignIdOrResourceName: string): string {
-    if (campaignIdOrResourceName.startsWith("customers/")) {
-        return campaignIdOrResourceName;
-    }
-    const normalizedCustomerId = normalizeCustomerId(customerId);
-    const campaignId = normalizeNumericId(campaignIdOrResourceName, "campaigns");
-    return `customers/${normalizedCustomerId}/campaigns/${campaignId}`;
+    return toResourceName(customerId, campaignIdOrResourceName, "campaigns");
 }
 function toAdGroupResourceName(customerId: string, adGroupIdOrResourceName: string): string {
-    if (adGroupIdOrResourceName.startsWith("customers/")) {
-        return adGroupIdOrResourceName;
-    }
-    const normalizedCustomerId = normalizeCustomerId(customerId);
-    const adGroupId = normalizeNumericId(adGroupIdOrResourceName, "adGroups");
-    return `customers/${normalizedCustomerId}/adGroups/${adGroupId}`;
+    return toResourceName(customerId, adGroupIdOrResourceName, "adGroups");
 }
 function toAssetGroupResourceName(customerId: string, assetGroupIdOrResourceName: string): string {
-    if (assetGroupIdOrResourceName.startsWith("customers/")) {
-        return assetGroupIdOrResourceName;
-    }
-    const normalizedCustomerId = normalizeCustomerId(customerId);
-    const assetGroupId = normalizeNumericId(assetGroupIdOrResourceName, "assetGroups");
-    return `customers/${normalizedCustomerId}/assetGroups/${assetGroupId}`;
+    return toResourceName(customerId, assetGroupIdOrResourceName, "assetGroups");
 }
 function toAssetResourceName(customerId: string, assetIdOrResourceName: string): string {
-    if (assetIdOrResourceName.startsWith("customers/")) {
-        return assetIdOrResourceName;
-    }
-    const normalizedCustomerId = normalizeCustomerId(customerId);
-    const assetId = normalizeNumericId(assetIdOrResourceName, "assets");
-    return `customers/${normalizedCustomerId}/assets/${assetId}`;
+    return toResourceName(customerId, assetIdOrResourceName, "assets");
 }
 function toCustomerAssetResourceName(customerId: string, assetIdOrResourceName: string, fieldType: string): string {
     const normalizedCustomerId = normalizeCustomerId(customerId);
@@ -472,40 +437,18 @@ async function listAssetLinks(args: z.infer<typeof ListAssetLinksSchema>) {
     ]);
     return { customer, campaign, adGroup, assetGroup };
 }
-async function asTool(fn: (args: any) => Promise<any>, args: any): Promise<{
-    content: [
-        {
-            type: "text";
-            text: string;
-        }
-    ];
-    isError?: true;
-}> {
-    try {
-        const result = await fn(args);
-        return {
-            content: [{ type: "text" as const, text: JSON.stringify(result, null, 2) }],
-        };
-    }
-    catch (error: any) {
-        return {
-            content: [{ type: "text" as const, text: `Error: ${error.message}` }],
-            isError: true,
-        };
-    }
-}
 export function registerAssetsAdvancedTools(server: McpServer) {
     server.registerTool("list_asset_groups", { description: "List Performance Max asset groups.", inputSchema: ListAssetGroupsSchema.shape }, args => asTool(listAssetGroups, args));
     server.registerTool("create_asset_group", { description: "Create a Performance Max asset group.", inputSchema: CreateAssetGroupSchema.shape }, args => asTool(createAssetGroup, args));
     server.registerTool("update_asset_group", { description: "Update a Performance Max asset group.", inputSchema: UpdateAssetGroupSchema.shape }, args => asTool(updateAssetGroup, args));
     server.registerTool("remove_asset_group", { description: "Remove a Performance Max asset group.", inputSchema: RemoveAssetGroupSchema.shape }, args => asTool(removeAssetGroup, args));
     server.registerTool("link_customer_asset", { description: "Link an asset at customer level.", inputSchema: LinkCustomerAssetSchema.shape }, args => asTool(linkCustomerAsset, args));
-    server.registerTool("unlink_customer_asset", { description: "Unlink a customer-level asset.", inputSchema: UnlinkCustomerAssetSchema.shape }, args => asTool(unlinkCustomerAsset, args));
+    server.registerTool("unlink_customer_asset", { description: "Unlink a customer-level asset.", inputSchema: UnlinkCustomerAssetSchema.shape }, args => asTool(a => unlinkCustomerAsset(UnlinkCustomerAssetSchema.parse(a)), args));
     server.registerTool("link_campaign_asset", { description: "Link an asset to a campaign.", inputSchema: LinkCampaignAssetSchema.shape }, args => asTool(linkCampaignAsset, args));
-    server.registerTool("unlink_campaign_asset", { description: "Unlink a campaign asset.", inputSchema: UnlinkCampaignAssetSchema.shape }, args => asTool(unlinkCampaignAsset, args));
+    server.registerTool("unlink_campaign_asset", { description: "Unlink a campaign asset.", inputSchema: UnlinkCampaignAssetSchema.shape }, args => asTool(a => unlinkCampaignAsset(UnlinkCampaignAssetSchema.parse(a)), args));
     server.registerTool("link_ad_group_asset", { description: "Link an asset to an ad group.", inputSchema: LinkAdGroupAssetSchema.shape }, args => asTool(linkAdGroupAsset, args));
-    server.registerTool("unlink_ad_group_asset", { description: "Unlink an ad-group asset.", inputSchema: UnlinkAdGroupAssetSchema.shape }, args => asTool(unlinkAdGroupAsset, args));
+    server.registerTool("unlink_ad_group_asset", { description: "Unlink an ad-group asset.", inputSchema: UnlinkAdGroupAssetSchema.shape }, args => asTool(a => unlinkAdGroupAsset(UnlinkAdGroupAssetSchema.parse(a)), args));
     server.registerTool("link_asset_group_asset", { description: "Link an asset to a Performance Max asset group.", inputSchema: LinkAssetGroupAssetSchema.shape }, args => asTool(linkAssetGroupAsset, args));
-    server.registerTool("unlink_asset_group_asset", { description: "Unlink an asset-group asset.", inputSchema: UnlinkAssetGroupAssetSchema.shape }, args => asTool(unlinkAssetGroupAsset, args));
+    server.registerTool("unlink_asset_group_asset", { description: "Unlink an asset-group asset.", inputSchema: UnlinkAssetGroupAssetSchema.shape }, args => asTool(a => unlinkAssetGroupAsset(UnlinkAssetGroupAssetSchema.parse(a)), args));
     server.registerTool("list_asset_links", { description: "List linked assets at customer/campaign/ad-group/asset-group levels.", inputSchema: ListAssetLinksSchema.shape }, args => asTool(listAssetLinks, args));
 }

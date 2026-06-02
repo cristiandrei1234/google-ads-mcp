@@ -1,12 +1,10 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
-import { getCustomer } from "../services/google-ads/client";
-import { runMutation } from "../services/google-ads/mutator";
-import { runQuery } from "./runQuery";
-const BaseSchema = z.object({
-    customerId: z.string().describe("The Google Ads Customer ID"),
-    userId: z.string().optional().describe("SaaS User ID"),
-});
+import { getCustomer } from "../services/google-ads/client.js";
+import { runMutation } from "../services/google-ads/mutator.js";
+import { runQuery } from "./runQuery.js";
+import { asTool } from "./_runtime.js";
+import { BaseSchema } from "./_schemas.js";
 const ListAdsSchema = BaseSchema.extend({
     campaignId: z.string().optional(),
     adGroupId: z.string().optional(),
@@ -127,28 +125,6 @@ async function updateAdContent(args: z.infer<typeof UpdateAdContentSchema>) {
         previousAdResourceName: oldResourceName,
         newAdResourceName: createResult?.mutate_operation_responses?.[0]?.ad_group_ad_result?.resource_name,
     };
-}
-async function asTool(fn: (args: any) => Promise<any>, args: any): Promise<{
-    content: [
-        {
-            type: "text";
-            text: string;
-        }
-    ];
-    isError?: true;
-}> {
-    try {
-        const result = await fn(args);
-        return {
-            content: [{ type: "text" as const, text: JSON.stringify(result, null, 2) }],
-        };
-    }
-    catch (error: any) {
-        return {
-            content: [{ type: "text" as const, text: `Error: ${error.message}` }],
-            isError: true,
-        };
-    }
 }
 export function registerAdsAdvancedTools(server: McpServer) {
     server.registerTool("list_ads", { description: "List ads with optional campaign/ad-group filters.", inputSchema: ListAdsSchema.shape }, args => asTool(listAds, args));

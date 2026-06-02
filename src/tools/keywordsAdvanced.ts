@@ -1,20 +1,11 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
-import { getCustomer } from "../services/google-ads/client";
-import { runMutation } from "../services/google-ads/mutator";
-import { runQuery } from "./runQuery";
-const BaseSchema = z.object({
-    customerId: z.string().describe("The Google Ads Customer ID"),
-    userId: z.string().optional().describe("SaaS User ID"),
-});
+import { getCustomer } from "../services/google-ads/client.js";
+import { runMutation } from "../services/google-ads/mutator.js";
+import { runQuery } from "./runQuery.js";
+import { asTool } from "./_runtime.js";
+import { BaseSchema, chunk } from "./_schemas.js";
 const MatchTypeSchema = z.enum(["BROAD", "PHRASE", "EXACT"]);
-function chunk<T>(items: T[], size: number): T[][] {
-    const chunks: T[][] = [];
-    for (let i = 0; i < items.length; i += size) {
-        chunks.push(items.slice(i, i + size));
-    }
-    return chunks;
-}
 const ListKeywordsSchema = BaseSchema.extend({
     campaignId: z.string().optional(),
     adGroupId: z.string().optional(),
@@ -199,23 +190,6 @@ async function bulkRemoveKeywords(args: z.infer<typeof BulkRemoveKeywordsSchema>
         await runMutation(customer, opsChunk);
     }
     return { removed: operations.length };
-}
-async function asTool(fn: (args: any) => Promise<any>, args: any): Promise<{
-    content: [
-        {
-            type: "text";
-            text: string;
-        }
-    ];
-    isError?: true;
-}> {
-    try {
-        const result = await fn(args);
-        return { content: [{ type: "text" as const, text: JSON.stringify(result, null, 2) }] };
-    }
-    catch (error: any) {
-        return { content: [{ type: "text" as const, text: `Error: ${error.message}` }], isError: true };
-    }
 }
 export function registerKeywordsAdvancedTools(server: McpServer) {
     server.registerTool("list_keywords", { description: "List keywords with optional filters.", inputSchema: ListKeywordsSchema.shape }, args => asTool(listKeywords, args));

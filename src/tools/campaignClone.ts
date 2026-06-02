@@ -1,19 +1,11 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
-import { getCustomer } from "../services/google-ads/client";
-import { runMutation } from "../services/google-ads/mutator";
-import { runQuery } from "./runQuery";
+import { getCustomer } from "../services/google-ads/client.js";
+import { runMutation } from "../services/google-ads/mutator.js";
+import { runQuery } from "./runQuery.js";
+import { asTool } from "./_runtime.js";
+import { BaseSchema, chunk } from "./_schemas.js";
 type Variant = "DESKTOP" | "MOBILE";
-const BaseSchema = z.object({
-    customerId: z.string(),
-    userId: z.string().optional(),
-});
-function chunk<T>(items: T[], size: number): T[][] {
-    const chunks: T[][] = [];
-    for (let i = 0; i < items.length; i += size)
-        chunks.push(items.slice(i, i + size));
-    return chunks;
-}
 function extractResourceName(result: any, key: string): string {
     const resourceName = result?.mutate_operation_responses?.[0]?.[key]?.resource_name;
     if (!resourceName)
@@ -114,8 +106,7 @@ async function copyAdGroupsKeywordsAndAds(customer: any, customerId: string, use
         });
     }
     for (const opsChunk of chunk(keywordOps, 100)) {
-        if (opsChunk.length > 0)
-            await runMutation(customer, opsChunk);
+        await runMutation(customer, opsChunk);
     }
     const adOps: any[] = [];
     for (const row of ads as any[]) {
@@ -148,8 +139,7 @@ async function copyAdGroupsKeywordsAndAds(customer: any, customerId: string, use
         });
     }
     for (const opsChunk of chunk(adOps, 20)) {
-        if (opsChunk.length > 0)
-            await runMutation(customer, opsChunk);
+        await runMutation(customer, opsChunk);
     }
     return { adGroupsCreated: adGroupMap.size, keywordsCopied: keywordOps.length, adsCopied: adOps.length };
 }
@@ -186,8 +176,7 @@ async function copyCampaignNegatives(customer: any, customerId: string, userId: 
     })
         .filter(Boolean) as any[];
     for (const opsChunk of chunk(operations, 100)) {
-        if (opsChunk.length > 0)
-            await runMutation(customer, opsChunk);
+        await runMutation(customer, opsChunk);
     }
     return operations.length;
 }
@@ -342,23 +331,6 @@ async function duplicateCampaignByDevice(args: z.infer<typeof DuplicateCampaignB
     await split(desktop.targetCampaignId, "DESKTOP");
     await split(mobile.targetCampaignId, "MOBILE");
     return { desktop, mobile };
-}
-async function asTool(fn: (args: any) => Promise<any>, args: any): Promise<{
-    content: [
-        {
-            type: "text";
-            text: string;
-        }
-    ];
-    isError?: true;
-}> {
-    try {
-        const result = await fn(args);
-        return { content: [{ type: "text" as const, text: JSON.stringify(result, null, 2) }] };
-    }
-    catch (error: any) {
-        return { content: [{ type: "text" as const, text: `Error: ${error.message}` }], isError: true };
-    }
 }
 export function registerCampaignCloneTools(server: McpServer) {
     server.registerTool("duplicate_campaign", { description: "Duplicate a campaign with ad groups, keywords, and ads.", inputSchema: DuplicateCampaignSchema.shape }, args => asTool(duplicateCampaign, args));

@@ -1,10 +1,10 @@
 import dotenv from 'dotenv';
-import config from '../src/config/env';
-import { listAccounts } from '../src/tools/listAccounts';
-import { runQuery } from '../src/tools/runQuery';
-import { listBillingSetups } from '../src/tools/billing';
-import { listMerchantCenterLinks } from '../src/tools/merchantLinking';
-import logger from '../src/observability/logger';
+import config from '../src/config/env.js';
+import { listAccounts } from '../src/tools/listAccounts.js';
+import { runQuery } from '../src/tools/runQuery.js';
+import { listBillingSetups } from '../src/tools/billing.js';
+import { listMerchantCenterLinks } from '../src/tools/merchantLinking.js';
+import logger from '../src/observability/logger.js';
 
 dotenv.config();
 

@@ -1,6 +1,6 @@
 import { z } from "zod";
-import { getCustomer } from "../services/google-ads/client";
-import logger from "../observability/logger";
+import { getCustomer } from "../services/google-ads/client.js";
+import logger from "../observability/logger.js";
 
 const GenerateKeywordIdeasSchema = z.object({
   customerId: z.string().describe("The Google Ads Customer ID"),

@@ -1,15 +1,11 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
-import { getCustomer } from "../services/google-ads/client";
-import { runMutation } from "../services/google-ads/mutator";
-import { runQuery } from "./runQuery";
-const BaseSchema = z.object({
-    customerId: z.string().describe("The Google Ads Customer ID"),
-    userId: z.string().optional().describe("SaaS User ID"),
-});
-function normalizeCustomerId(customerId: string): string {
-    return customerId.replace(/-/g, "");
-}
+import { getCustomer } from "../services/google-ads/client.js";
+import { runMutation } from "../services/google-ads/mutator.js";
+import { runQuery } from "./runQuery.js";
+import { asTool } from "./_runtime.js";
+import { BaseSchema } from "./_schemas.js";
+import { normalizeCustomerId } from "../services/google-ads/resourceNames.js";
 function toExperimentResourceName(customerId: string, experimentIdOrResourceName: string): string {
     if (experimentIdOrResourceName.startsWith("customers/")) {
         return experimentIdOrResourceName;
@@ -200,28 +196,6 @@ async function listExperimentAsyncErrors(args: z.infer<typeof ListExperimentAsyn
         nextPageToken: response?.next_page_token,
         response,
     };
-}
-async function asTool(fn: (args: any) => Promise<any>, args: any): Promise<{
-    content: [
-        {
-            type: "text";
-            text: string;
-        }
-    ];
-    isError?: true;
-}> {
-    try {
-        const result = await fn(args);
-        return {
-            content: [{ type: "text" as const, text: JSON.stringify(result, null, 2) }],
-        };
-    }
-    catch (error: any) {
-        return {
-            content: [{ type: "text" as const, text: `Error: ${error.message}` }],
-            isError: true,
-        };
-    }
 }
 export function registerExperimentsAdvancedTools(server: McpServer) {
     server.registerTool("update_experiment", { description: "Update experiment metadata and status.", inputSchema: UpdateExperimentSchema.shape }, args => asTool(updateExperiment, args));
