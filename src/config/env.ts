@@ -1,7 +1,15 @@
 import dotenv from 'dotenv';
 import { z } from 'zod';
+import { fileURLToPath } from 'node:url';
+import path from 'node:path';
 
-dotenv.config();
+// Load .env by an absolute path derived from this module's location (project
+// root is two levels up from src/config or dist/config), so the server works
+// regardless of the launcher's working directory (e.g. Claude Desktop spawns
+// it from System32). `quiet` suppresses dotenv's stdout banner, which would
+// otherwise corrupt the stdio MCP JSON-RPC stream.
+const moduleDir = path.dirname(fileURLToPath(import.meta.url));
+dotenv.config({ path: path.resolve(moduleDir, '../../.env'), quiet: true });
 
 const envSchema = z.object({
   DATABASE_URL: z
