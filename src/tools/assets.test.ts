@@ -2,13 +2,13 @@ import { describe, it, expect, beforeEach, vi } from "vitest";
 
 vi.mock("../services/google-ads/client.js", () => ({ getCustomer: vi.fn(), getClient: vi.fn() }));
 vi.mock("../services/google-ads/mutator.js", () => ({ runMutation: vi.fn() }));
-vi.mock("axios", () => ({ default: { get: vi.fn() } }));
+vi.mock("../services/net/safeFetch.js", () => ({ fetchPublicImage: vi.fn() }));
 vi.mock("../observability/logger.js", () => ({ default: { error: vi.fn(), info: vi.fn(), warn: vi.fn() } }));
 
 import { createTextAsset, createImageAsset, listAssets } from "./assets.js";
 import { getCustomer } from "../services/google-ads/client.js";
 import { runMutation } from "../services/google-ads/mutator.js";
-import axios from "axios";
+import { fetchPublicImage } from "../services/net/safeFetch.js";
 import logger from "../observability/logger.js";
 import { fakeCustomer } from "../test/harness.js";
 
@@ -48,9 +48,9 @@ describe("createTextAsset", () => {
 
 describe("createImageAsset", () => {
   it("fetches the image, base64-encodes it and creates an IMAGE asset", async () => {
-    (axios as any).get.mockResolvedValue({ data: Buffer.from("imgbytes") });
+    (fetchPublicImage as any).mockResolvedValue(Buffer.from("imgbytes"));
     await createImageAsset({ customerId: "1", imageUrl: "http://x/y.png", name: "Pic", userId: "u2" });
-    expect((axios as any).get).toHaveBeenCalledWith("http://x/y.png", { responseType: "arraybuffer" });
+    expect(fetchPublicImage).toHaveBeenCalledWith("http://x/y.png");
     const op = (runMutation as any).mock.calls[0][1][0];
     expect(op.asset_operation.create).toMatchObject({
       type: "IMAGE",
@@ -60,14 +60,14 @@ describe("createImageAsset", () => {
   });
 
   it("works with name undefined", async () => {
-    (axios as any).get.mockResolvedValue({ data: Buffer.from("z") });
+    (fetchPublicImage as any).mockResolvedValue(Buffer.from("z"));
     await createImageAsset({ customerId: "1", imageUrl: "http://x/y.png" });
     const op = (runMutation as any).mock.calls[0][1][0];
     expect(op.asset_operation.create.name).toBeUndefined();
   });
 
-  it("logs and rethrows when the fetch fails", async () => {
-    (axios as any).get.mockRejectedValue(new Error("boom"));
+  it("logs and rethrows when the fetch is blocked or fails", async () => {
+    (fetchPublicImage as any).mockRejectedValue(new Error("boom"));
     await expect(createImageAsset({ customerId: "1", imageUrl: "http://bad" })).rejects.toThrow("boom");
     expect((logger as any).error).toHaveBeenCalledWith(expect.stringContaining("boom"));
     expect(runMutation).not.toHaveBeenCalled();
