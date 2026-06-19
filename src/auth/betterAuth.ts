@@ -1,6 +1,7 @@
 import { betterAuth } from "better-auth";
 import { prismaAdapter } from "better-auth/adapters/prisma";
 import { organization, admin, bearer, mcp } from "better-auth/plugins";
+import { sso } from "@better-auth/sso";
 import prisma from "../services/db.js";
 import config from "../config/env.js";
 import logger from "../observability/logger.js";
@@ -104,6 +105,14 @@ export const auth = betterAuth({
     }),
     admin(),
     bearer(),
+    // Enterprise SSO (SAML 2.0 + OIDC). Providers are registered per agency at
+    // runtime (POST /api/auth/sso/register) and used via /api/auth/sign-in/sso.
+    // A federated user is linked to their org so existing RBAC/grants apply.
+    sso({
+      provisionUser: async ({ user }) => {
+        logger.info({ userId: user.id, email: user.email }, "SSO user provisioned");
+      },
+    }),
     mcp({ loginPage: "/sign-in" }),
   ],
 });

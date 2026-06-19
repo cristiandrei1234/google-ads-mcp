@@ -133,6 +133,25 @@ The server speaks **Streamable HTTP** at `POST/GET/DELETE /mcp`, gated by auth.
 Claude-style remote MCP connectors discover authorization via the Better Auth
 `mcp` plugin's OAuth/OIDC metadata.
 
+### Enterprise SSO (SAML 2.0 / OIDC)
+Powered by `@better-auth/sso`. An agency admin registers their IdP once, then
+employees sign in through it (federated users are auto-linked to the org, so the
+same RBAC/grants apply).
+
+```bash
+# Register a provider for the org (admin, authenticated):
+POST /api/auth/sso/register   { issuer, domain, providerId, samlConfig | oidcConfig, organizationId }
+# Employees sign in:
+POST /api/auth/sign-in/sso    { email | providerId, callbackURL }
+# SAML SP metadata for the IdP:
+GET  /api/auth/sso/saml2/sp/metadata?providerId=...
+```
+
+Validate against a real IdP (Okta, Azure AD, Google Workspace SAML) before
+rollout — wiring is exercised by `smoke-auth`, but the IdP handshake is not.
+**SCIM** (IdP-driven user provisioning) is not included; it is a separate
+protocol build tracked as a roadmap item.
+
 ## Operations runbook
 
 - **Onboard an employee**: invite them to the organization (Better Auth

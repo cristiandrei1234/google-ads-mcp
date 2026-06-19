@@ -47,10 +47,11 @@ model User {
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
 
-  sessions    Session[]
-  accounts    Account[]
-  members     Member[]
-  invitations Invitation[]
+  sessions     Session[]
+  accounts     Account[]
+  members      Member[]
+  invitations  Invitation[]
+  ssoProviders SsoProvider[]
 }
 
 model Session {
@@ -145,6 +146,27 @@ model Invitation {
   createdAt      DateTime     @default(now())
   inviterId      String
   inviter        User         @relation(fields: [inviterId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId])
+}
+
+// ----------------------------------------------------------------------------
+// Better Auth — SSO plugin (@better-auth/sso): enterprise SAML 2.0 + OIDC.
+// One row per registered identity provider, optionally scoped to an org.
+// ----------------------------------------------------------------------------
+
+model SsoProvider {
+  id             String  @id @default(cuid())
+  issuer         String
+  /// JSON OIDC config (when the provider is OIDC).
+  oidcConfig     String?
+  /// JSON SAML config (when the provider is SAML 2.0).
+  samlConfig     String?
+  userId         String?
+  user           User?   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  providerId     String  @unique
+  organizationId String?
+  domain         String
 
   @@index([organizationId])
 }
