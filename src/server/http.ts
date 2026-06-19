@@ -14,6 +14,14 @@ import config, { assertHttpServerConfig } from "../config/env.js";
 import logger from "../observability/logger.js";
 import { SessionStore } from "./sessionStore.js";
 import { checkDatabase, shutdown, installSignalHandlers } from "./lifecycle.js";
+import {
+  metricsText,
+  metricsContentType,
+  setActiveSessions,
+  enableDefaultMetrics,
+} from "../observability/metrics.js";
+
+enableDefaultMetrics();
 
 // Fail closed: refuse to start without a real signing key, encryption key, and
 // public URL (no default-secret / localhost-origin boot in production).
@@ -92,6 +100,24 @@ app.get("/health/ready", async (_req: Request, res: Response) => {
     checks: { database: dbOk ? "ok" : "down" },
     sessions: sessions.size,
   });
+});
+
+// Prometheus scrape endpoint. Guarded by a bearer token (METRICS_TOKEN): never
+// exposed publicly, since metrics leak traffic shape and internal tool names.
+// When METRICS_TOKEN is unset the endpoint is disabled (404) rather than open.
+app.get("/metrics", async (req: Request, res: Response) => {
+  const token = process.env.METRICS_TOKEN;
+  if (!token) {
+    res.status(404).json({ error: "not_found" });
+    return;
+  }
+  if (req.headers.authorization !== `Bearer ${token}`) {
+    res.status(401).json({ error: "unauthorized" });
+    return;
+  }
+  setActiveSessions(sessions.size);
+  res.setHeader("Content-Type", metricsContentType);
+  res.send(await metricsText());
 });
 
 // Admin-only audit trail for the caller's organization.
