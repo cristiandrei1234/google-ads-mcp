@@ -4,8 +4,22 @@ import logger from '../../observability/logger.js';
 import { getConnectionForCustomer } from '../db.js';
 import { getIdentity } from '../../auth/identityContext.js';
 import { normalizeCustomerId } from './resourceNames.js';
+import { wrapCustomerWithResilience, type RetryConfig } from './retry.js';
 
 let apiInstance: GoogleAdsApi;
+
+/** Default per-attempt timeout when GOOGLE_ADS_API_TIMEOUT_MS is unset (60s). */
+const DEFAULT_API_TIMEOUT_MS = 60_000;
+/** Default retry count when GOOGLE_ADS_API_MAX_RETRIES is unset. */
+const DEFAULT_API_MAX_RETRIES = 3;
+
+/** Resilience config applied to every Customer's query/mutate calls. */
+function resilienceConfig(): RetryConfig {
+  return {
+    timeoutMs: config.GOOGLE_ADS_API_TIMEOUT_MS ?? DEFAULT_API_TIMEOUT_MS,
+    retries: config.GOOGLE_ADS_API_MAX_RETRIES ?? DEFAULT_API_MAX_RETRIES,
+  };
+}
 
 function normalizeOptionalCustomerId(customerId?: string | null): string | undefined {
   if (!customerId) return undefined;
@@ -59,11 +73,14 @@ export async function getCustomer(customerId: string, _ignoredUserId?: string) {
       );
     }
     logger.info(`Resolved connection ${resolved.connectionId} (${resolved.accessLevel}) for user ${userId}`);
-    return api.Customer({
-      customer_id: normalizedCustomerId,
-      refresh_token: resolved.refreshToken,
-      login_customer_id: resolved.mccCustomerId,
-    });
+    return wrapCustomerWithResilience(
+      api.Customer({
+        customer_id: normalizedCustomerId,
+        refresh_token: resolved.refreshToken,
+        login_customer_id: resolved.mccCustomerId,
+      }),
+      resilienceConfig()
+    );
   }
 
   const refreshToken = config.GOOGLE_ADS_REFRESH_TOKEN;
@@ -74,9 +91,12 @@ export async function getCustomer(customerId: string, _ignoredUserId?: string) {
     );
   }
 
-  return api.Customer({
-    customer_id: normalizedCustomerId,
-    refresh_token: refreshToken,
-    login_customer_id: normalizeOptionalCustomerId(config.GOOGLE_ADS_LOGIN_CUSTOMER_ID),
-  });
+  return wrapCustomerWithResilience(
+    api.Customer({
+      customer_id: normalizedCustomerId,
+      refresh_token: refreshToken,
+      login_customer_id: normalizeOptionalCustomerId(config.GOOGLE_ADS_LOGIN_CUSTOMER_ID),
+    }),
+    resilienceConfig()
+  );
 }

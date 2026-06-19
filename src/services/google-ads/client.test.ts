@@ -17,6 +17,8 @@ const { GoogleAdsApiMock, customerFactory, mockConfig, getConnectionForCustomer,
         GOOGLE_ADS_DEVELOPER_TOKEN: "dev-token",
         GOOGLE_ADS_REFRESH_TOKEN: undefined as string | undefined,
         GOOGLE_ADS_LOGIN_CUSTOMER_ID: undefined as string | undefined,
+        GOOGLE_ADS_API_TIMEOUT_MS: undefined as number | undefined,
+        GOOGLE_ADS_API_MAX_RETRIES: undefined as number | undefined,
       },
       getConnectionForCustomer: vi.fn(),
       getIdentity: vi.fn(),
@@ -49,6 +51,8 @@ beforeEach(() => {
   mockConfig.GOOGLE_ADS_DEVELOPER_TOKEN = "dev-token";
   mockConfig.GOOGLE_ADS_REFRESH_TOKEN = undefined;
   mockConfig.GOOGLE_ADS_LOGIN_CUSTOMER_ID = undefined;
+  mockConfig.GOOGLE_ADS_API_TIMEOUT_MS = undefined;
+  mockConfig.GOOGLE_ADS_API_MAX_RETRIES = undefined;
   getConnectionForCustomer.mockReset();
   getIdentity.mockReset();
 });
@@ -132,6 +136,26 @@ describe("getCustomer - multi-tenant (identity present)", () => {
     await expect(getCustomer("1234567890")).rejects.toThrow(
       /User u3 has no grant for customer 1234567890/
     );
+  });
+
+  it("wraps the Customer's query/mutate with the configured resilience", async () => {
+    getIdentity.mockReturnValue({ userId: "u1", orgId: "org1" });
+    getConnectionForCustomer.mockResolvedValue({
+      connectionId: "c1",
+      accessLevel: "WRITE",
+      refreshToken: "t",
+      mccCustomerId: "1",
+    });
+    mockConfig.GOOGLE_ADS_API_TIMEOUT_MS = 1234;
+    mockConfig.GOOGLE_ADS_API_MAX_RETRIES = 1;
+    const innerQuery = vi.fn(async () => "rows");
+    customerFactory.mockReturnValueOnce({ query: innerQuery });
+    const { getCustomer } = await loadModule();
+    const customer = (await getCustomer("1234567890")) as { query: (q: string) => Promise<string> };
+    // The wrapped method delegates to the underlying query (retry is transparent
+    // on success), so the original is invoked and its value returned.
+    await expect(customer.query("SELECT 1")).resolves.toBe("rows");
+    expect(innerQuery).toHaveBeenCalledWith("SELECT 1");
   });
 
   it("ignores the caller-supplied userId argument (uses identity)", async () => {
