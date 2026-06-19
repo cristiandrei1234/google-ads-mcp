@@ -189,6 +189,20 @@ Claude-style remote MCP connectors discover authorization via the Better Auth
 - [ ] `TRUST_PROXY_HOPS` matches your proxy chain (never trust the whole chain).
 - [ ] Backups verified restorable; `./backups` synced off-site.
 
+### Dependency advisories
+`npm audit` is clean of all directly-reachable issues. The remaining **5 moderate**
+advisories are transitive and not reachable in our usage; fixing them needs a
+breaking change or an upstream bump, so they are accepted and tracked:
+
+- **`@hono/node-server`** (×3, via `@prisma/dev` → `prisma`): Prisma's local **dev
+  server** (`prisma dev`). Production only runs `prisma migrate deploy` /
+  `prisma generate`, so this code path never loads. Fix would downgrade Prisma 7→6.
+- **`uuid <11.1.1`** (×2, via `gaxios` → `google-auth-library` → `google-ads-api`):
+  bounds bug only when a `buf` argument is passed to v3/v5/v6 — gaxios does not.
+  Resolves when google-ads-api bumps its gaxios.
+
+Re-check after dependency upgrades with `npm audit`.
+
 ## Tests
 
 ```bash
