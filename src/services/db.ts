@@ -259,6 +259,30 @@ export async function addGrant(input: AddGrantInput) {
   });
 }
 
+/** List all grants in an org (joined with member email + connection label) for the admin UI. */
+export async function listGrantsForOrg(organizationId: string) {
+  const grants = await prisma.accountGrant.findMany({
+    where: { connection: { organizationId } },
+    select: {
+      memberId: true,
+      connectionId: true,
+      customerId: true,
+      accessLevel: true,
+      member: { select: { user: { select: { email: true } } } },
+      connection: { select: { label: true } },
+    },
+    orderBy: { customerId: "asc" },
+  });
+  return grants.map((g) => ({
+    memberId: g.memberId,
+    memberEmail: g.member.user.email,
+    connectionId: g.connectionId,
+    connectionLabel: g.connection.label,
+    customerId: g.customerId,
+    accessLevel: g.accessLevel,
+  }));
+}
+
 export async function removeGrant(memberId: string, connectionId: string, customerId: string) {
   return prisma.accountGrant.deleteMany({
     where: { memberId, connectionId, customerId: normalizeCustomerId(customerId) },

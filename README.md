@@ -177,6 +177,13 @@ redirect URI in your Google Cloud OAuth client (alongside the social-login
 callback). The OAuth client needs the Google Ads API enabled and the `adwords`
 scope. These endpoints are the backend the web dashboard drives.
 
+### Web dashboard (`web/`)
+A Next.js dashboard (`web/`, deployed separately) gives owners/employees a
+self-serve UI over the auth + onboarding API: sign up, create an agency, connect
+Google Ads (the OAuth button), and assign per-account access to the team. See
+`web/README.md`. Set the server's `WEB_APP_ORIGIN` to the dashboard's origin so
+CORS allows credentialed requests.
+
 ## Operations runbook
 
 - **Onboard an employee**: invite them to the organization (Better Auth

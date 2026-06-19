@@ -76,6 +76,7 @@ import prisma, {
   getOrgConnection,
   listOrgMembers,
   memberInOrg,
+  listGrantsForOrg,
   markConnectionReauthNeeded,
   addGrant,
   removeGrant,
@@ -242,6 +243,33 @@ describe("listOrgMembers", () => {
     const members = await listOrgMembers("org1");
     expect(members[0]).toMatchObject({ id: "m1", role: "admin", user: { email: "a@x.io" } });
     expect(memberFindManyMock.mock.calls[0][0].where).toEqual({ organizationId: "org1" });
+  });
+});
+
+describe("listGrantsForOrg", () => {
+  it("flattens member email and connection label into each grant", async () => {
+    grantFindManyMock.mockResolvedValue([
+      {
+        memberId: "m1",
+        connectionId: "c1",
+        customerId: "1234567890",
+        accessLevel: "WRITE",
+        member: { user: { email: "a@x.io" } },
+        connection: { label: "Agency MCC" },
+      },
+    ]);
+    const grants = await listGrantsForOrg("org1");
+    expect(grants).toEqual([
+      {
+        memberId: "m1",
+        memberEmail: "a@x.io",
+        connectionId: "c1",
+        connectionLabel: "Agency MCC",
+        customerId: "1234567890",
+        accessLevel: "WRITE",
+      },
+    ]);
+    expect(grantFindManyMock.mock.calls[0][0].where).toEqual({ connection: { organizationId: "org1" } });
   });
 });
 

@@ -17,6 +17,7 @@ import prisma, {
   memberInOrg,
   addGrant,
   removeGrant,
+  listGrantsForOrg,
 } from "../services/db.js";
 import type { AccessLevel } from "@prisma/client";
 import { signConnectState, verifyConnectState } from "../auth/connectState.js";
@@ -328,6 +329,13 @@ app.get("/admin/accessible-accounts", async (req: Request, res: Response) => {
   } catch (err) {
     res.status(502).json({ error: "google_ads_error", message: toErrorMessage(err) });
   }
+});
+
+// List all grants in the org (member email + connection label + account).
+app.get("/admin/grants", async (req: Request, res: Response) => {
+  const authCtx = await resolveOrgAdmin(req, res);
+  if (!authCtx) return;
+  res.json({ grants: await listGrantsForOrg(authCtx.orgId!) });
 });
 
 const GRANT_LEVELS = new Set(["READ", "WRITE", "ADMIN"]);
