@@ -44,6 +44,11 @@ jobs:
 
       - run: npm ci
 
+      - name: Dependency audit (fail on high/critical)
+        # Moderate transitive advisories are documented as accepted in the
+        # README; this gate blocks newly-introduced high/critical issues.
+        run: npm audit --audit-level=high
+
       - name: Generate test secrets
         run: |
           echo "TOKEN_ENCRYPTION_KEY=$(openssl rand -base64 32)" >> "$GITHUB_ENV"

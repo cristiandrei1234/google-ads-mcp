@@ -225,8 +225,25 @@ npx tsx scripts/smoke-identity.ts  # grant-gated access + anti-impersonation
 npx tsx scripts/smoke-http.ts      # HTTP auth gate → tools/call → audit (server must run)
 ```
 
-CI (`.github/workflows/ci.yml`) boots Postgres and runs migrations → typecheck →
-`npm run coverage` (100% gate) → build → all four smoke suites.
+CI (`.github/workflows/ci.yml`) runs a dependency audit (fail on high/critical) →
+boots Postgres and runs migrations → typecheck → `npm run coverage` (100% gate) →
+build → all four smoke suites. Dependabot opens weekly update PRs.
+
+### Load & performance
+`scripts/load-test.js` is a [k6](https://k6.io) script (ramps to 50 VUs, fails on
+readiness p95 > 500ms or any health-check error):
+
+```bash
+k6 run scripts/load-test.js                  # BASE defaults to :3939
+TOKEN=<bearer> k6 run scripts/load-test.js   # also exercises authed tools/list
+# quick local signal without k6:
+npx autocannon -c 20 -d 10 http://localhost:3939/health/ready
+```
+
+Measured on a single Node process against Prisma Postgres (autocannon): `/healthz`
+~3.5k req/s (p99 230ms); `/health/ready` (DB-backed) ~240 req/s (p99 104ms), zero
+errors — the pg pool holds under sustained concurrency. Scale horizontally behind
+Caddy for higher throughput.
 
 ## Skills
 

@@ -1,0 +1,19 @@
+version: 2
+updates:
+  # Weekly npm dependency PRs (security + version bumps), grouped to reduce noise.
+  - package-ecosystem: npm
+    directory: "/"
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 10
+    groups:
+      prod-dependencies:
+        dependency-type: production
+      dev-dependencies:
+        dependency-type: development
+
+  # Keep GitHub Actions pinned versions current.
+  - package-ecosystem: github-actions
+    directory: "/"
+    schedule:
+      interval: weekly
