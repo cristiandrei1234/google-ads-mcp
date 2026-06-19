@@ -19,23 +19,29 @@ const m = vi.hoisted(() => ({
   upsertMock: vi.fn(),
   findManyMock: vi.fn(),
   updateMock: vi.fn(),
+  connFindFirstMock: vi.fn(),
   grantUpsertMock: vi.fn(),
   deleteManyMock: vi.fn(),
   grantFindFirstMock: vi.fn(),
   grantFindManyMock: vi.fn(),
   auditCreateMock: vi.fn(),
   userFindUniqueMock: vi.fn(),
+  memberFindManyMock: vi.fn(),
+  memberFindFirstMock: vi.fn(),
 }));
 const {
   upsertMock,
   findManyMock,
   updateMock,
+  connFindFirstMock,
   grantUpsertMock,
   deleteManyMock,
   grantFindFirstMock,
   grantFindManyMock,
   auditCreateMock,
   userFindUniqueMock,
+  memberFindManyMock,
+  memberFindFirstMock,
 } = m;
 
 vi.mock("@prisma/adapter-pg", () => ({
@@ -44,7 +50,12 @@ vi.mock("@prisma/adapter-pg", () => ({
 
 vi.mock("@prisma/client", () => ({
   PrismaClient: vi.fn(function (this: any) {
-    this.googleAdsConnection = { upsert: m.upsertMock, findMany: m.findManyMock, update: m.updateMock };
+    this.googleAdsConnection = {
+      upsert: m.upsertMock,
+      findMany: m.findManyMock,
+      update: m.updateMock,
+      findFirst: m.connFindFirstMock,
+    };
     this.accountGrant = {
       findFirst: m.grantFindFirstMock,
       findMany: m.grantFindManyMock,
@@ -53,6 +64,7 @@ vi.mock("@prisma/client", () => ({
     };
     this.auditLog = { create: m.auditCreateMock };
     this.user = { findUnique: m.userFindUniqueMock };
+    this.member = { findMany: m.memberFindManyMock, findFirst: m.memberFindFirstMock };
   }),
 }));
 
@@ -60,6 +72,10 @@ import prisma, {
   upsertConnection,
   getConnectionForCustomer,
   listConnectionsForUser,
+  listConnectionsForOrg,
+  getOrgConnection,
+  listOrgMembers,
+  memberInOrg,
   markConnectionReauthNeeded,
   addGrant,
   removeGrant,
@@ -188,6 +204,56 @@ describe("markConnectionReauthNeeded", () => {
   it("swallows errors (e.g. connection already deleted)", async () => {
     updateMock.mockRejectedValue(new Error("record not found"));
     await expect(markConnectionReauthNeeded("gone")).resolves.toBeUndefined();
+  });
+});
+
+describe("listConnectionsForOrg", () => {
+  it("returns org connections without secrets", async () => {
+    findManyMock.mockResolvedValue([{ id: "c1", label: "Agency MCC", mccCustomerId: "1", status: "active" }]);
+    const rows = await listConnectionsForOrg("org1");
+    expect(rows).toEqual([{ id: "c1", label: "Agency MCC", mccCustomerId: "1", status: "active" }]);
+    const arg = findManyMock.mock.calls[0][0];
+    expect(arg.where).toEqual({ organizationId: "org1" });
+    expect(arg.select.refreshTokenEnc).toBeUndefined();
+  });
+});
+
+describe("getOrgConnection", () => {
+  it("returns the decrypted token when the connection belongs to the org", async () => {
+    connFindFirstMock.mockResolvedValue({
+      id: "c1",
+      organizationId: "org1",
+      mccCustomerId: "1234567890",
+      refreshTokenEnc: encConnToken("rt-secret", "org1", "1234567890"),
+    });
+    const resolved = await getOrgConnection("c1", "org1");
+    expect(resolved).toMatchObject({ connectionId: "c1", mccCustomerId: "1234567890", refreshToken: "rt-secret", accessLevel: "ADMIN" });
+  });
+
+  it("returns null when not found in the org", async () => {
+    connFindFirstMock.mockResolvedValue(null);
+    expect(await getOrgConnection("c1", "org1")).toBeNull();
+  });
+});
+
+describe("listOrgMembers", () => {
+  it("returns members with their user email/name", async () => {
+    memberFindManyMock.mockResolvedValue([{ id: "m1", userId: "u1", role: "admin", user: { email: "a@x.io", name: "A" } }]);
+    const members = await listOrgMembers("org1");
+    expect(members[0]).toMatchObject({ id: "m1", role: "admin", user: { email: "a@x.io" } });
+    expect(memberFindManyMock.mock.calls[0][0].where).toEqual({ organizationId: "org1" });
+  });
+});
+
+describe("memberInOrg", () => {
+  it("is true when the member belongs to the org", async () => {
+    memberFindFirstMock.mockResolvedValue({ id: "m1" });
+    expect(await memberInOrg("m1", "org1")).toBe(true);
+  });
+
+  it("is false otherwise", async () => {
+    memberFindFirstMock.mockResolvedValue(null);
+    expect(await memberInOrg("m1", "org9")).toBe(false);
   });
 });
 

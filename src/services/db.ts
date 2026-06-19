@@ -169,6 +169,65 @@ export async function listConnectionsForUser(
   }));
 }
 
+/** List an org's connections (no secrets) for admin/onboarding views. */
+export async function listConnectionsForOrg(organizationId: string) {
+  return prisma.googleAdsConnection.findMany({
+    where: { organizationId },
+    select: {
+      id: true,
+      label: true,
+      mccCustomerId: true,
+      ownerMemberId: true,
+      isAgencyRoot: true,
+      status: true,
+      createdAt: true,
+    },
+    orderBy: { createdAt: "asc" },
+  });
+}
+
+/** Resolve a connection by id, scoped to an org, with its decrypted token. */
+export async function getOrgConnection(
+  connectionId: string,
+  organizationId: string
+): Promise<ResolvedConnection | null> {
+  const connection = await prisma.googleAdsConnection.findFirst({
+    where: { id: connectionId, organizationId },
+  });
+  if (!connection) {
+    return null;
+  }
+  return {
+    connectionId: connection.id,
+    mccCustomerId: connection.mccCustomerId,
+    refreshToken: decryptConnectionToken(connection, getEncryptionKeys()),
+    accessLevel: "ADMIN",
+  };
+}
+
+/** List an org's members (for assigning grants in the admin UI). */
+export async function listOrgMembers(organizationId: string) {
+  return prisma.member.findMany({
+    where: { organizationId },
+    select: {
+      id: true,
+      userId: true,
+      role: true,
+      user: { select: { email: true, name: true } },
+    },
+    orderBy: { createdAt: "asc" },
+  });
+}
+
+/** True iff a member belongs to the given organization. */
+export async function memberInOrg(memberId: string, organizationId: string): Promise<boolean> {
+  const member = await prisma.member.findFirst({
+    where: { id: memberId, organizationId },
+    select: { id: true },
+  });
+  return member !== null;
+}
+
 // ---------------------------------------------------------------------------
 // Grants (which client accounts a member may act on, and at what level)
 // ---------------------------------------------------------------------------

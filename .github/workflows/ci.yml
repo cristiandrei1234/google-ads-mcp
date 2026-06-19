@@ -77,7 +77,7 @@ jobs:
       - name: Identity / authz smoke
         run: npx tsx scripts/smoke-identity.ts
 
-      - name: HTTP end-to-end smoke
+      - name: HTTP + onboarding end-to-end smoke
         run: |
           node dist/server/http.js &
           SERVER_PID=$!
@@ -86,4 +86,5 @@ jobs:
             sleep 1
           done
           npx tsx scripts/smoke-http.ts
+          npx tsx scripts/smoke-connect.ts
           kill $SERVER_PID

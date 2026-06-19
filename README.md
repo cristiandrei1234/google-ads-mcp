@@ -152,6 +152,31 @@ rollout — wiring is exercised by `smoke-auth`, but the IdP handshake is not.
 **SCIM** (IdP-driven user provisioning) is not included; it is a separate
 protocol build tracked as a roadmap item.
 
+### Onboarding: connecting a Google Ads account
+A signed-in member (agency owner or employee) links their own Google Ads account
+via OAuth; the agency MCC and per-employee MCCs are both supported (one
+`GoogleAdsConnection` per linked MCC, owned by the member).
+
+```bash
+# 1. Member opens this in a browser (auth-gated) -> Google consent (adwords scope):
+GET  /connect/google-ads
+#    Callback stores the encrypted refresh token + auto-detected login MCC, then
+#    redirects to ${WEB_APP_ORIGIN}/connect/result?status=connected&mcc=...
+GET  /connect/google-ads/callback        # (Google redirects here)
+
+# Admin onboarding API (org admin/owner only):
+GET    /admin/connections                # linked MCCs in the org (no secrets)
+GET    /admin/members                    # members, to assign grants to
+GET    /admin/accessible-accounts?connectionId=...   # client accounts under an MCC
+POST   /admin/grants    { memberId, connectionId, customerId, accessLevel }
+DELETE /admin/grants    { memberId, connectionId, customerId }
+```
+
+Register `${BETTER_AUTH_URL}/connect/google-ads/callback` as an authorized
+redirect URI in your Google Cloud OAuth client (alongside the social-login
+callback). The OAuth client needs the Google Ads API enabled and the `adwords`
+scope. These endpoints are the backend the web dashboard drives.
+
 ## Operations runbook
 
 - **Onboard an employee**: invite them to the organization (Better Auth

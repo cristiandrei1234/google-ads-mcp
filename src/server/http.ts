@@ -9,9 +9,26 @@ import { isInitializeRequest } from "@modelcontextprotocol/sdk/types.js";
 import { auth } from "../auth/betterAuth.js";
 import { createMcpServer } from "../createServer.js";
 import { runWithIdentity, type AuthContext } from "../auth/identityContext.js";
-import prisma from "../services/db.js";
+import prisma, {
+  upsertConnection,
+  listConnectionsForOrg,
+  getOrgConnection,
+  listOrgMembers,
+  memberInOrg,
+  addGrant,
+  removeGrant,
+} from "../services/db.js";
+import type { AccessLevel } from "@prisma/client";
+import { signConnectState, verifyConnectState } from "../auth/connectState.js";
+import {
+  getConsentUrl,
+  exchangeCodeForRefreshToken,
+  detectLoginCustomerId,
+  listClientAccounts,
+} from "../services/google-ads/oauth.js";
 import config, { assertHttpServerConfig } from "../config/env.js";
 import logger from "../observability/logger.js";
+import { toErrorMessage } from "../observability/errorMessage.js";
 import { SessionStore } from "./sessionStore.js";
 import { checkDatabase, shutdown, installSignalHandlers } from "./lifecycle.js";
 import {
@@ -206,6 +223,154 @@ async function resolveAuthContext(req: Request): Promise<AuthContext | null> {
 
   return { userId, orgId, memberId, role, requestId: (req as Request & { requestId?: string }).requestId };
 }
+
+// ---------------------------------------------------------------------------
+// Google Ads connect (OAuth) + admin onboarding (connections, members, grants)
+// ---------------------------------------------------------------------------
+
+const webAppOrigin = process.env.WEB_APP_ORIGIN ?? config.BETTER_AUTH_URL ?? "http://localhost:3000";
+const connectRedirectUri = `${config.BETTER_AUTH_URL}/connect/google-ads/callback`;
+
+/** Resolve an authenticated org admin, or write 401/403 and return null. */
+async function resolveOrgAdmin(req: Request, res: Response): Promise<AuthContext | null> {
+  const authCtx = await resolveAuthContext(req);
+  if (!authCtx) {
+    res.status(401).json({ error: "unauthorized" });
+    return null;
+  }
+  if (!authCtx.orgId || !ADMIN_ROLES.has(authCtx.role ?? "")) {
+    res.status(403).json({ error: "forbidden", message: "Organization admin role required." });
+    return null;
+  }
+  return authCtx;
+}
+
+// Begin the Google Ads OAuth connect: redirect the signed-in member to Google's
+// consent screen (adwords scope). The signed `state` binds the flow to them.
+app.get("/connect/google-ads", async (req: Request, res: Response) => {
+  const authCtx = await resolveAuthContext(req);
+  if (!authCtx) {
+    res.status(401).json({ error: "unauthorized", message: "Sign in first." });
+    return;
+  }
+  if (!authCtx.orgId || !authCtx.memberId) {
+    res.status(403).json({ error: "forbidden", message: "Join an organization before connecting an account." });
+    return;
+  }
+  const state = signConnectState({ memberId: authCtx.memberId, orgId: authCtx.orgId }, config.BETTER_AUTH_SECRET!);
+  res.redirect(getConsentUrl(connectRedirectUri, state));
+});
+
+// OAuth callback: exchange the code, detect the login (MCC) customer, store the
+// encrypted connection, then bounce back to the web app.
+app.get("/connect/google-ads/callback", async (req: Request, res: Response) => {
+  const result = (status: string, extra = "") =>
+    res.redirect(`${webAppOrigin}/connect/result?status=${status}${extra}`);
+  const code = typeof req.query.code === "string" ? req.query.code : undefined;
+  const stateToken = typeof req.query.state === "string" ? req.query.state : undefined;
+  if (!code || !stateToken) {
+    result("error", "&message=" + encodeURIComponent("Missing authorization code or state."));
+    return;
+  }
+  const state = verifyConnectState(stateToken, config.BETTER_AUTH_SECRET!);
+  if (!state) {
+    result("error", "&message=" + encodeURIComponent("Invalid or expired authorization state."));
+    return;
+  }
+  try {
+    const refreshToken = await exchangeCodeForRefreshToken(connectRedirectUri, code);
+    const { mccCustomerId } = await detectLoginCustomerId(refreshToken);
+    await upsertConnection({
+      organizationId: state.orgId,
+      ownerMemberId: state.memberId,
+      label: `Google Ads ${mccCustomerId}`,
+      mccCustomerId,
+      refreshToken,
+    });
+    logger.info({ orgId: state.orgId, memberId: state.memberId, mccCustomerId }, "Google Ads connection linked");
+    result("connected", "&mcc=" + encodeURIComponent(mccCustomerId));
+  } catch (err) {
+    logger.error({ err }, "Google Ads connect failed");
+    result("error", "&message=" + encodeURIComponent(toErrorMessage(err)));
+  }
+});
+
+// List the org's connections (no secrets).
+app.get("/admin/connections", async (req: Request, res: Response) => {
+  const authCtx = await resolveOrgAdmin(req, res);
+  if (!authCtx) return;
+  res.json({ connections: await listConnectionsForOrg(authCtx.orgId!) });
+});
+
+// List the org's members (to assign grants to).
+app.get("/admin/members", async (req: Request, res: Response) => {
+  const authCtx = await resolveOrgAdmin(req, res);
+  if (!authCtx) return;
+  res.json({ members: await listOrgMembers(authCtx.orgId!) });
+});
+
+// List the client accounts reachable under a connection's MCC (for granting).
+app.get("/admin/accessible-accounts", async (req: Request, res: Response) => {
+  const authCtx = await resolveOrgAdmin(req, res);
+  if (!authCtx) return;
+  const connectionId = typeof req.query.connectionId === "string" ? req.query.connectionId : undefined;
+  if (!connectionId) {
+    res.status(400).json({ error: "bad_request", message: "connectionId is required." });
+    return;
+  }
+  const connection = await getOrgConnection(connectionId, authCtx.orgId!);
+  if (!connection) {
+    res.status(404).json({ error: "not_found", message: "Connection not in your organization." });
+    return;
+  }
+  try {
+    res.json({ accounts: await listClientAccounts(connection.refreshToken, connection.mccCustomerId) });
+  } catch (err) {
+    res.status(502).json({ error: "google_ads_error", message: toErrorMessage(err) });
+  }
+});
+
+const GRANT_LEVELS = new Set(["READ", "WRITE", "ADMIN"]);
+
+// Grant a member access to a client account through a connection.
+app.post("/admin/grants", async (req: Request, res: Response) => {
+  const authCtx = await resolveOrgAdmin(req, res);
+  if (!authCtx) return;
+  const { memberId, connectionId, customerId, accessLevel } = req.body ?? {};
+  if (typeof memberId !== "string" || typeof connectionId !== "string" || typeof customerId !== "string") {
+    res.status(400).json({ error: "bad_request", message: "memberId, connectionId and customerId are required." });
+    return;
+  }
+  // Both the connection and the member must belong to the admin's own org.
+  if (!(await getOrgConnection(connectionId, authCtx.orgId!))) {
+    res.status(404).json({ error: "not_found", message: "Connection not in your organization." });
+    return;
+  }
+  if (!(await memberInOrg(memberId, authCtx.orgId!))) {
+    res.status(404).json({ error: "not_found", message: "Member not in your organization." });
+    return;
+  }
+  const level: AccessLevel = GRANT_LEVELS.has(accessLevel) ? accessLevel : "READ";
+  const grant = await addGrant({ memberId, connectionId, customerId, accessLevel: level });
+  res.json({ grant: { memberId, connectionId, customerId: grant.customerId, accessLevel: grant.accessLevel } });
+});
+
+// Revoke a member's grant.
+app.delete("/admin/grants", async (req: Request, res: Response) => {
+  const authCtx = await resolveOrgAdmin(req, res);
+  if (!authCtx) return;
+  const { memberId, connectionId, customerId } = req.body ?? {};
+  if (typeof memberId !== "string" || typeof connectionId !== "string" || typeof customerId !== "string") {
+    res.status(400).json({ error: "bad_request", message: "memberId, connectionId and customerId are required." });
+    return;
+  }
+  if (!(await getOrgConnection(connectionId, authCtx.orgId!))) {
+    res.status(404).json({ error: "not_found", message: "Connection not in your organization." });
+    return;
+  }
+  const { count } = await removeGrant(memberId, connectionId, customerId);
+  res.json({ removed: count });
+});
 
 // Per-IP rate limit for the MCP endpoint (auth endpoints are limited by Better Auth).
 const mcpLimiter = rateLimit({
