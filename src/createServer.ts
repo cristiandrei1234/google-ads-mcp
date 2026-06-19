@@ -55,6 +55,7 @@ import { toErrorMessage } from "./observability/errorMessage.js";
 import { asTool } from "./tools/_runtime.js";
 import logger from "./observability/logger.js";
 import { recordToolInvocation } from "./observability/metrics.js";
+import { withToolSpan } from "./observability/tracing.js";
 
 type RegisteredToolHandler = (...toolArgs: any[]) => Promise<any> | any;
 function extractCustomerIdFromArgs(args: unknown): string | undefined {
@@ -149,7 +150,11 @@ function withRbac(toolName: string, handler: RegisteredToolHandler): RegisteredT
         }
 
         try {
-            const result = await handler(...toolArgs);
+            const result = await withToolSpan(
+                `tool:${toolName}`,
+                { "mcp.tool": toolName, "mcp.customer_id": customerId ?? "", "enduser.id": identity?.userId ?? "" },
+                () => Promise.resolve(handler(...toolArgs))
+            );
             // Tools that catch internally return {isError:true} instead of throwing;
             // record those as errors, not successes.
             const outcome = result && typeof result === "object" && (result as { isError?: unknown }).isError === true ? "error" : "ok";

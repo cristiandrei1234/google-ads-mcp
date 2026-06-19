@@ -150,6 +150,15 @@ Claude-style remote MCP connectors discover authorization via the Better Auth
   with `Authorization: Bearer $METRICS_TOKEN`. Exposes tool invocation
   counts/latency, Google Ads API call duration, active sessions, and default
   process metrics.
+- **Tracing**: the code is instrumented with the vendor-neutral OpenTelemetry
+  **API** (each tool runs in a `tool:<name>` span). No SDK is bundled — enable
+  real tracing at deploy with zero code changes:
+  ```bash
+  npm i -g @opentelemetry/auto-instrumentations-node   # in the runtime env
+  NODE_OPTIONS="--require @opentelemetry/auto-instrumentations-node/register" \
+  OTEL_EXPORTER_OTLP_ENDPOINT=https://collector:4318 OTEL_SERVICE_NAME=google-ads-mcp \
+    node dist/server/http.js
+  ```
 - **Connection re-auth**: when Google rejects a connection's refresh token
   (`invalid_grant`), it is flagged `status = reauth_required` so an admin re-links
   it instead of every call failing opaquely.
