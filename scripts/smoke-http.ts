@@ -139,6 +139,19 @@ async function main() {
     assert(auditJson.count >= 1, "/audit returns at least one row");
     console.log(`✓ GET /audit (admin) -> ${auditJson.count} row(s)`);
 
+    // 8) session revocation: admin revokes the user, the bearer token dies
+    const revoke = await fetch(`${BASE}/admin/revoke-sessions`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+      body: JSON.stringify({ userId: user.id }),
+    });
+    assert(revoke.status === 200, `revoke should be 200, got ${revoke.status}`);
+    const revokeJson = await revoke.json();
+    assert(revokeJson.revokedAuthSessions >= 1, "revoke removed at least one auth session");
+    const afterRevoke = await fetch(`${BASE}/audit?limit=1`, { headers: { Authorization: `Bearer ${token}` } });
+    assert(afterRevoke.status === 401, `revoked token should be 401, got ${afterRevoke.status}`);
+    console.log(`✓ POST /admin/revoke-sessions -> token revoked (next call 401)`);
+
     console.log("\nALL HTTP E2E CHECKS PASSED");
   } finally {
     if (orgId) {

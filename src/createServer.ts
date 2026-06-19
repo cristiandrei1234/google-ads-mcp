@@ -54,6 +54,8 @@ import { appendAuditLog, getGrantLevel } from "./services/db.js";
 import { toErrorMessage } from "./observability/errorMessage.js";
 import { asTool } from "./tools/_runtime.js";
 import logger from "./observability/logger.js";
+import { recordToolInvocation } from "./observability/metrics.js";
+import { withToolSpan } from "./observability/tracing.js";
 
 type RegisteredToolHandler = (...toolArgs: any[]) => Promise<any> | any;
 function extractCustomerIdFromArgs(args: unknown): string | undefined {
@@ -92,6 +94,17 @@ function audit(
 
 function withRbac(toolName: string, handler: RegisteredToolHandler): RegisteredToolHandler {
     return async (...toolArgs: any[]) => {
+        const startedAt = Date.now();
+        // Record both the audit row (org-scoped, persisted) and the Prometheus
+        // metric (always, incl. single-operator/stdio) at every terminal outcome.
+        const finish = (
+            customerId: string | undefined,
+            outcome: "ok" | "error" | "denied",
+            errorKind?: string
+        ) => {
+            audit(toolName, customerId, outcome, errorKind);
+            recordToolInvocation(toolName, outcome, (Date.now() - startedAt) / 1000);
+        };
         const identity = getIdentity();
         // Strip any caller-supplied userId: identity comes from the authenticated
         // session, never from arguments (prevents tenant impersonation).
@@ -102,7 +115,7 @@ function withRbac(toolName: string, handler: RegisteredToolHandler): RegisteredT
 
         const verdict = can(identity, toolName);
         if (!verdict.allowed) {
-            audit(toolName, customerId, "denied", "role");
+            finish(customerId, "denied", "role");
             return {
                 content: [{ type: "text", text: `Error: ${verdict.reason ?? "Access denied."}` }],
                 isError: true,
@@ -114,7 +127,7 @@ function withRbac(toolName: string, handler: RegisteredToolHandler): RegisteredT
         if (identity && customerId && isWriteTool(toolName)) {
             const level = await getGrantLevel(identity.userId, customerId, identity.orgId);
             if (level !== "WRITE" && level !== "ADMIN") {
-                audit(toolName, customerId, "denied", "insufficient_grant");
+                finish(customerId, "denied", "insufficient_grant");
                 return {
                     content: [
                         {
@@ -129,7 +142,7 @@ function withRbac(toolName: string, handler: RegisteredToolHandler): RegisteredT
 
         const confirmation = checkDestructiveConfirmation(toolName, toolArgs[0]);
         if (!confirmation.allowed) {
-            audit(toolName, customerId, "denied", "unconfirmed_destructive");
+            finish(customerId, "denied", "unconfirmed_destructive");
             return {
                 content: [{ type: "text", text: `Error: ${confirmation.reason}` }],
                 isError: true,
@@ -137,15 +150,19 @@ function withRbac(toolName: string, handler: RegisteredToolHandler): RegisteredT
         }
 
         try {
-            const result = await handler(...toolArgs);
+            const result = await withToolSpan(
+                `tool:${toolName}`,
+                { "mcp.tool": toolName, "mcp.customer_id": customerId ?? "", "enduser.id": identity?.userId ?? "" },
+                () => Promise.resolve(handler(...toolArgs))
+            );
             // Tools that catch internally return {isError:true} instead of throwing;
             // record those as errors, not successes.
             const outcome = result && typeof result === "object" && (result as { isError?: unknown }).isError === true ? "error" : "ok";
-            audit(toolName, customerId, outcome);
+            finish(customerId, outcome);
             return result;
         }
         catch (error: any) {
-            audit(toolName, customerId, "error", error?.name);
+            finish(customerId, "error", error?.name);
             logger.error({ err: error, tool: toolName, customerId, requestId: identity?.requestId }, "tool execution failed");
             return {
                 content: [{ type: "text", text: `Error: ${toErrorMessage(error)}` }],

@@ -44,6 +44,11 @@ jobs:
 
       - run: npm ci
 
+      - name: Dependency audit (fail on high/critical)
+        # Moderate transitive advisories are documented as accepted in the
+        # README; this gate blocks newly-introduced high/critical issues.
+        run: npm audit --audit-level=high
+
       - name: Generate test secrets
         run: |
           echo "TOKEN_ENCRYPTION_KEY=$(openssl rand -base64 32)" >> "$GITHUB_ENV"
@@ -72,7 +77,7 @@ jobs:
       - name: Identity / authz smoke
         run: npx tsx scripts/smoke-identity.ts
 
-      - name: HTTP end-to-end smoke
+      - name: HTTP + onboarding end-to-end smoke
         run: |
           node dist/server/http.js &
           SERVER_PID=$!
@@ -81,4 +86,5 @@ jobs:
             sleep 1
           done
           npx tsx scripts/smoke-http.ts
+          npx tsx scripts/smoke-connect.ts
           kill $SERVER_PID

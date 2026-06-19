@@ -28,6 +28,10 @@ const envSchema = z.object({
     .transform(s => s?.trim())
     .refine(s => s === undefined || s.length > 0, "GOOGLE_ADS_REFRESH_TOKEN cannot be empty"),
   GOOGLE_ADS_LOGIN_CUSTOMER_ID: z.string().optional().transform(s => s?.trim().replace(/-/g, '')),
+  // Resilience for outbound Google Ads API calls. Per-attempt timeout (ms) and
+  // number of retries on transient (429/5xx/UNAVAILABLE/network) failures.
+  GOOGLE_ADS_API_TIMEOUT_MS: z.coerce.number().int().positive().optional(),
+  GOOGLE_ADS_API_MAX_RETRIES: z.coerce.number().int().min(0).optional(),
   // Force every mutation to run as validate-only (no writes) regardless of the
   // per-call dryRun flag. Accepts 1/true/yes (case-insensitive); anything else
   // (incl. unset) is false.

@@ -1,6 +1,7 @@
 import { betterAuth } from "better-auth";
 import { prismaAdapter } from "better-auth/adapters/prisma";
 import { organization, admin, bearer, mcp } from "better-auth/plugins";
+import { sso } from "@better-auth/sso";
 import prisma from "../services/db.js";
 import config from "../config/env.js";
 import logger from "../observability/logger.js";
@@ -23,6 +24,9 @@ import { sendActionEmail, isEmailConfigured } from "../services/email.js";
  */
 
 const baseURL = config.BETTER_AUTH_URL ?? "http://localhost:3000";
+// Where the web dashboard lives — invitation/accept links must point here, not
+// at the API. Falls back to the API origin if no separate web app is configured.
+const webAppOrigin = process.env.WEB_APP_ORIGIN ?? baseURL;
 
 const trustedOrigins = Array.from(
   new Set(
@@ -93,7 +97,7 @@ export const auth = betterAuth({
   plugins: [
     organization({
       async sendInvitationEmail(data) {
-        const url = `${baseURL}/accept-invitation/${data.id}`;
+        const url = `${webAppOrigin}/accept-invitation/${data.id}`;
         await sendActionEmail(data.email, `You're invited to ${data.organization.name}`, {
           heading: `Join ${data.organization.name}`,
           body: `${data.inviter.user.name || data.inviter.user.email} invited you to the ${data.organization.name} workspace on Google Ads MCP.`,
@@ -104,6 +108,14 @@ export const auth = betterAuth({
     }),
     admin(),
     bearer(),
+    // Enterprise SSO (SAML 2.0 + OIDC). Providers are registered per agency at
+    // runtime (POST /api/auth/sso/register) and used via /api/auth/sign-in/sso.
+    // A federated user is linked to their org so existing RBAC/grants apply.
+    sso({
+      provisionUser: async ({ user }) => {
+        logger.info({ userId: user.id, email: user.email }, "SSO user provisioned");
+      },
+    }),
     mcp({ loginPage: "/sign-in" }),
   ],
 });

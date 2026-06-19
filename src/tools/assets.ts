@@ -2,7 +2,7 @@ import { z } from "zod";
 import { getCustomer } from "../services/google-ads/client.js";
 import { runMutation } from "../services/google-ads/mutator.js";
 import logger from "../observability/logger.js";
-import axios from "axios";
+import { fetchPublicImage } from "../services/net/safeFetch.js";
 
 // --- Text Assets ---
 
@@ -46,9 +46,9 @@ export async function createImageAsset(args: z.infer<typeof CreateImageAssetSche
   const customer = await getCustomer(args.customerId, args.userId);
   
   try {
-    // 1. Fetch the image
-    const response = await axios.get(args.imageUrl, { responseType: 'arraybuffer' });
-    const buffer = Buffer.from(response.data);
+    // 1. Fetch the image (SSRF-guarded: rejects private/loopback targets,
+    //    disables redirects, and bounds size + time).
+    const buffer = await fetchPublicImage(args.imageUrl);
     const base64Image = buffer.toString('base64');
     
     // 2. Upload asset

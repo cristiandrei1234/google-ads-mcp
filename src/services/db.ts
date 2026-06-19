@@ -97,6 +97,18 @@ export async function upsertConnection(input: CreateConnectionInput): Promise<Go
   });
 }
 
+/**
+ * Flag a connection as needing re-authentication after Google rejected its
+ * refresh token (invalid_grant). Surfaces in get_user_status / admin views so a
+ * human re-links it, instead of every tool call failing opaquely. Best-effort:
+ * a missing connection is ignored (it may have just been deleted).
+ */
+export async function markConnectionReauthNeeded(connectionId: string): Promise<void> {
+  await prisma.googleAdsConnection
+    .update({ where: { id: connectionId }, data: { status: "reauth_required" } })
+    .catch(() => undefined);
+}
+
 export interface ResolvedConnection {
   connectionId: string;
   mccCustomerId: string;
@@ -157,6 +169,65 @@ export async function listConnectionsForUser(
   }));
 }
 
+/** List an org's connections (no secrets) for admin/onboarding views. */
+export async function listConnectionsForOrg(organizationId: string) {
+  return prisma.googleAdsConnection.findMany({
+    where: { organizationId },
+    select: {
+      id: true,
+      label: true,
+      mccCustomerId: true,
+      ownerMemberId: true,
+      isAgencyRoot: true,
+      status: true,
+      createdAt: true,
+    },
+    orderBy: { createdAt: "asc" },
+  });
+}
+
+/** Resolve a connection by id, scoped to an org, with its decrypted token. */
+export async function getOrgConnection(
+  connectionId: string,
+  organizationId: string
+): Promise<ResolvedConnection | null> {
+  const connection = await prisma.googleAdsConnection.findFirst({
+    where: { id: connectionId, organizationId },
+  });
+  if (!connection) {
+    return null;
+  }
+  return {
+    connectionId: connection.id,
+    mccCustomerId: connection.mccCustomerId,
+    refreshToken: decryptConnectionToken(connection, getEncryptionKeys()),
+    accessLevel: "ADMIN",
+  };
+}
+
+/** List an org's members (for assigning grants in the admin UI). */
+export async function listOrgMembers(organizationId: string) {
+  return prisma.member.findMany({
+    where: { organizationId },
+    select: {
+      id: true,
+      userId: true,
+      role: true,
+      user: { select: { email: true, name: true } },
+    },
+    orderBy: { createdAt: "asc" },
+  });
+}
+
+/** True iff a member belongs to the given organization. */
+export async function memberInOrg(memberId: string, organizationId: string): Promise<boolean> {
+  const member = await prisma.member.findFirst({
+    where: { id: memberId, organizationId },
+    select: { id: true },
+  });
+  return member !== null;
+}
+
 // ---------------------------------------------------------------------------
 // Grants (which client accounts a member may act on, and at what level)
 // ---------------------------------------------------------------------------
@@ -186,6 +257,30 @@ export async function addGrant(input: AddGrantInput) {
       accessLevel: input.accessLevel ?? "READ",
     },
   });
+}
+
+/** List all grants in an org (joined with member email + connection label) for the admin UI. */
+export async function listGrantsForOrg(organizationId: string) {
+  const grants = await prisma.accountGrant.findMany({
+    where: { connection: { organizationId } },
+    select: {
+      memberId: true,
+      connectionId: true,
+      customerId: true,
+      accessLevel: true,
+      member: { select: { user: { select: { email: true } } } },
+      connection: { select: { label: true } },
+    },
+    orderBy: { customerId: "asc" },
+  });
+  return grants.map((g) => ({
+    memberId: g.memberId,
+    memberEmail: g.member.user.email,
+    connectionId: g.connectionId,
+    connectionLabel: g.connection.label,
+    customerId: g.customerId,
+    accessLevel: g.accessLevel,
+  }));
 }
 
 export async function removeGrant(memberId: string, connectionId: string, customerId: string) {

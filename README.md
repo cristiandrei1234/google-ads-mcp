@@ -78,6 +78,10 @@ secrets are missing/invalid, so production never boots with a default key.
 | `TRUST_PROXY_HOPS` | optional | reverse-proxy hop count (default 1 = a single Caddy) |
 | `GOOGLE_ADS_REFRESH_TOKEN` / `GOOGLE_ADS_LOGIN_CUSTOMER_ID` | optional | single-operator stdio fallback |
 | `GOOGLE_ADS_VALIDATE_ONLY` | optional | global dry-run: all mutations run validate-only |
+| `GOOGLE_ADS_API_TIMEOUT_MS` | optional | per-attempt timeout for Google Ads API calls (default 60000) |
+| `GOOGLE_ADS_API_MAX_RETRIES` | optional | retries on transient (429/5xx/UNAVAILABLE/network) failures (default 3) |
+| `METRICS_TOKEN` | optional | bearer token for `GET /metrics`; unset = endpoint disabled (404) |
+| `SESSION_TTL_MS` / `SESSION_SWEEP_MS` | optional | MCP session inactivity expiry / sweep interval (default 30m / 60s) |
 | `MERCHANT_CENTER_ID`, `LOG_LEVEL` | optional | |
 
 Register `${BETTER_AUTH_URL}/api/auth/callback/google` as an authorized redirect
@@ -129,6 +133,57 @@ The server speaks **Streamable HTTP** at `POST/GET/DELETE /mcp`, gated by auth.
 Claude-style remote MCP connectors discover authorization via the Better Auth
 `mcp` plugin's OAuth/OIDC metadata.
 
+### Enterprise SSO (SAML 2.0 / OIDC)
+Powered by `@better-auth/sso`. An agency admin registers their IdP once, then
+employees sign in through it (federated users are auto-linked to the org, so the
+same RBAC/grants apply).
+
+```bash
+# Register a provider for the org (admin, authenticated):
+POST /api/auth/sso/register   { issuer, domain, providerId, samlConfig | oidcConfig, organizationId }
+# Employees sign in:
+POST /api/auth/sign-in/sso    { email | providerId, callbackURL }
+# SAML SP metadata for the IdP:
+GET  /api/auth/sso/saml2/sp/metadata?providerId=...
+```
+
+Validate against a real IdP (Okta, Azure AD, Google Workspace SAML) before
+rollout — wiring is exercised by `smoke-auth`, but the IdP handshake is not.
+**SCIM** (IdP-driven user provisioning) is not included; it is a separate
+protocol build tracked as a roadmap item.
+
+### Onboarding: connecting a Google Ads account
+A signed-in member (agency owner or employee) links their own Google Ads account
+via OAuth; the agency MCC and per-employee MCCs are both supported (one
+`GoogleAdsConnection` per linked MCC, owned by the member).
+
+```bash
+# 1. Member opens this in a browser (auth-gated) -> Google consent (adwords scope):
+GET  /connect/google-ads
+#    Callback stores the encrypted refresh token + auto-detected login MCC, then
+#    redirects to ${WEB_APP_ORIGIN}/connect/result?status=connected&mcc=...
+GET  /connect/google-ads/callback        # (Google redirects here)
+
+# Admin onboarding API (org admin/owner only):
+GET    /admin/connections                # linked MCCs in the org (no secrets)
+GET    /admin/members                    # members, to assign grants to
+GET    /admin/accessible-accounts?connectionId=...   # client accounts under an MCC
+POST   /admin/grants    { memberId, connectionId, customerId, accessLevel }
+DELETE /admin/grants    { memberId, connectionId, customerId }
+```
+
+Register `${BETTER_AUTH_URL}/connect/google-ads/callback` as an authorized
+redirect URI in your Google Cloud OAuth client (alongside the social-login
+callback). The OAuth client needs the Google Ads API enabled and the `adwords`
+scope. These endpoints are the backend the web dashboard drives.
+
+### Web dashboard (`web/`)
+A Next.js dashboard (`web/`, deployed separately) gives owners/employees a
+self-serve UI over the auth + onboarding API: sign up, create an agency, connect
+Google Ads (the OAuth button), and assign per-account access to the team. See
+`web/README.md`. Set the server's `WEB_APP_ORIGIN` to the dashboard's origin so
+CORS allows credentialed requests.
+
 ## Operations runbook
 
 - **Onboard an employee**: invite them to the organization (Better Auth
@@ -139,17 +194,79 @@ Claude-style remote MCP connectors discover authorization via the Better Auth
 - **Grant/revoke account access**: manage `AccountGrant` rows (admin tooling is a
   follow-up; see `docs/REPLATFORM.md`).
 - **Audit**: `GET /audit?limit=100[&customerId=...]` (org admin only).
-- **Key rotation**: generate a new `TOKEN_ENCRYPTION_KEY`, move the old key into
-  `TOKEN_ENCRYPTION_KEY_PREVIOUS` (comma-separated, decrypt-only). New writes use
-  the new key; existing tokens still decrypt via the previous key and are
-  re-encrypted on next write. Ciphertexts are versioned (`v1`/`v2`).
-- **Backup/restore**: backups land in `./backups`; restore with
-  `gunzip -c <file>.sql.gz | psql ...`. Sync `./backups` off-site for real DR.
+- **Health**: `GET /healthz` (liveness, always cheap) and `GET /health/ready`
+  (readiness — verifies Postgres answers; returns 503 when the DB is down so the
+  proxy stops routing). The prod compose health-checks `mcp` on `/health/ready`.
+- **Metrics**: `GET /metrics` (Prometheus) when `METRICS_TOKEN` is set — scrape
+  with `Authorization: Bearer $METRICS_TOKEN`. Exposes tool invocation
+  counts/latency, Google Ads API call duration, active sessions, and default
+  process metrics.
+- **Tracing**: the code is instrumented with the vendor-neutral OpenTelemetry
+  **API** (each tool runs in a `tool:<name>` span). No SDK is bundled — enable
+  real tracing at deploy with zero code changes:
+  ```bash
+  npm i -g @opentelemetry/auto-instrumentations-node   # in the runtime env
+  NODE_OPTIONS="--require @opentelemetry/auto-instrumentations-node/register" \
+  OTEL_EXPORTER_OTLP_ENDPOINT=https://collector:4318 OTEL_SERVICE_NAME=google-ads-mcp \
+    node dist/server/http.js
+  ```
+- **Connection re-auth**: when Google rejects a connection's refresh token
+  (`invalid_grant`), it is flagged `status = reauth_required` so an admin re-links
+  it instead of every call failing opaquely.
+- **Key rotation**: generate a new `TOKEN_ENCRYPTION_KEY`, set the old key as
+  `TOKEN_ENCRYPTION_KEY_PREVIOUS` (comma-separated, decrypt-only), then run
+  `npm run rotate-key` (add `--dry-run` first) to re-encrypt every stored token
+  under the new key. Afterwards drop the old key from `_PREVIOUS` and restart.
+  New writes already use the new key; ciphertexts are versioned (`v1`/`v2`).
+- **Backup/restore**: backups land in `./backups` (daily `pg_dump`, 14-day
+  retention). Restore into a running Postgres with:
+  ```bash
+  gunzip -c ./backups/google_ads_mcp-<ts>.sql.gz \
+    | docker compose -f docker-compose.prod.yml exec -T postgres \
+        psql -U postgres -d google_ads_mcp
+  ```
+  Sync `./backups` off-site (S3/rsync) for real disaster recovery.
+
+### Common failures
+- **`/health/ready` returns 503 / "database: down"**: Postgres is unreachable or
+  the pool is exhausted. Check `docker compose logs postgres`; verify
+  `DATABASE_URL`; restart `postgres` then `mcp`.
+- **Tools fail with auth errors for one client**: that connection's token was
+  revoked (`status = reauth_required`) — have the owner re-link their MCC.
+- **Google Ads calls intermittently fail**: transient 429/5xx are retried
+  automatically; persistent 429 means you're hitting Google quota — slow the
+  cadence or raise `GOOGLE_ADS_API_MAX_RETRIES` cautiously.
+- **Container won't come up**: usually a failed `prisma migrate deploy` (check
+  `mcp` logs) or a fail-closed config error (missing `BETTER_AUTH_SECRET` /
+  `TOKEN_ENCRYPTION_KEY` / `BETTER_AUTH_URL`).
+
+### Pre-launch security checklist
+- [ ] `TOKEN_ENCRYPTION_KEY` and `BETTER_AUTH_SECRET` are fresh 32-byte randoms,
+      stored only in `.env.prod` (never committed).
+- [ ] `BETTER_AUTH_URL` is `https://` and `WEB_APP_ORIGIN` lists only real origins.
+- [ ] `METRICS_TOKEN` set (or `/metrics` intentionally disabled); `/metrics` and
+      `/audit` are not exposed publicly beyond the proxy.
+- [ ] `TRUST_PROXY_HOPS` matches your proxy chain (never trust the whole chain).
+- [ ] Backups verified restorable; `./backups` synced off-site.
+
+### Dependency advisories
+`npm audit` is clean of all directly-reachable issues. The remaining **5 moderate**
+advisories are transitive and not reachable in our usage; fixing them needs a
+breaking change or an upstream bump, so they are accepted and tracked:
+
+- **`@hono/node-server`** (×3, via `@prisma/dev` → `prisma`): Prisma's local **dev
+  server** (`prisma dev`). Production only runs `prisma migrate deploy` /
+  `prisma generate`, so this code path never loads. Fix would downgrade Prisma 7→6.
+- **`uuid <11.1.1`** (×2, via `gaxios` → `google-auth-library` → `google-ads-api`):
+  bounds bug only when a `buf` argument is passed to v3/v5/v6 — gaxios does not.
+  Resolves when google-ads-api bumps its gaxios.
+
+Re-check after dependency upgrades with `npm audit`.
 
 ## Tests
 
 ```bash
-npm test                 # vitest unit suite — 859 tests, offline (mocks)
+npm test                 # vitest unit suite — 944 tests, offline (mocks)
 npm run coverage         # same + coverage; gated at 100% (statements/branches/funcs/lines)
 npm run typecheck        # tsc --noEmit
 ```
@@ -168,8 +285,25 @@ npx tsx scripts/smoke-identity.ts  # grant-gated access + anti-impersonation
 npx tsx scripts/smoke-http.ts      # HTTP auth gate → tools/call → audit (server must run)
 ```
 
-CI (`.github/workflows/ci.yml`) boots Postgres and runs migrations → typecheck →
-`npm run coverage` (100% gate) → build → all four smoke suites.
+CI (`.github/workflows/ci.yml`) runs a dependency audit (fail on high/critical) →
+boots Postgres and runs migrations → typecheck → `npm run coverage` (100% gate) →
+build → all four smoke suites. Dependabot opens weekly update PRs.
+
+### Load & performance
+`scripts/load-test.js` is a [k6](https://k6.io) script (ramps to 50 VUs, fails on
+readiness p95 > 500ms or any health-check error):
+
+```bash
+k6 run scripts/load-test.js                  # BASE defaults to :3939
+TOKEN=<bearer> k6 run scripts/load-test.js   # also exercises authed tools/list
+# quick local signal without k6:
+npx autocannon -c 20 -d 10 http://localhost:3939/health/ready
+```
+
+Measured on a single Node process against Prisma Postgres (autocannon): `/healthz`
+~3.5k req/s (p99 230ms); `/health/ready` (DB-backed) ~240 req/s (p99 104ms), zero
+errors — the pg pool holds under sustained concurrency. Scale horizontally behind
+Caddy for higher throughput.
 
 ## Skills
 
