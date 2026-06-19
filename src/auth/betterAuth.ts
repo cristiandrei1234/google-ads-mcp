@@ -24,6 +24,9 @@ import { sendActionEmail, isEmailConfigured } from "../services/email.js";
  */
 
 const baseURL = config.BETTER_AUTH_URL ?? "http://localhost:3000";
+// Where the web dashboard lives — invitation/accept links must point here, not
+// at the API. Falls back to the API origin if no separate web app is configured.
+const webAppOrigin = process.env.WEB_APP_ORIGIN ?? baseURL;
 
 const trustedOrigins = Array.from(
   new Set(
@@ -94,7 +97,7 @@ export const auth = betterAuth({
   plugins: [
     organization({
       async sendInvitationEmail(data) {
-        const url = `${baseURL}/accept-invitation/${data.id}`;
+        const url = `${webAppOrigin}/accept-invitation/${data.id}`;
         await sendActionEmail(data.email, `You're invited to ${data.organization.name}`, {
           heading: `Join ${data.organization.name}`,
           body: `${data.inviter.user.name || data.inviter.user.email} invited you to the ${data.organization.name} workspace on Google Ads MCP.`,

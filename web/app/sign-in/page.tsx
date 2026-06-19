@@ -26,7 +26,8 @@ export default function SignInPage() {
       setError(error.message || "Sign-in failed.");
       return;
     }
-    router.push("/dashboard");
+    const redirect = new URLSearchParams(window.location.search).get("redirect");
+    router.push(redirect && redirect.startsWith("/") ? redirect : "/dashboard");
   }
 
   return (

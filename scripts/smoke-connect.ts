@@ -100,6 +100,17 @@ async function main() {
     assert(del.status === 200 && delJson.removed === 1, "grant removed");
     console.log("✓ DELETE /admin/grants");
 
+    // 4) invite a teammate (Better Auth organization plugin)
+    const invite = await fetch(`${BASE}/api/auth/organization/invite-member`, {
+      method: "POST",
+      headers: { ...auth, Origin: ORIGIN },
+      body: JSON.stringify({ email: `invitee-${process.pid}@example.test`, role: "member", organizationId: org.id }),
+    });
+    assert(invite.ok, `invite-member should succeed, got ${invite.status}: ${await invite.clone().text()}`);
+    const invitationCount = await prisma.invitation.count({ where: { organizationId: org.id, status: "pending" } });
+    assert(invitationCount === 1, `one pending invitation expected, got ${invitationCount}`);
+    console.log("✓ POST /api/auth/organization/invite-member -> pending invitation created");
+
     console.log("\nALL CONNECT/ONBOARDING SMOKE CHECKS PASSED");
   } finally {
     if (orgId) {

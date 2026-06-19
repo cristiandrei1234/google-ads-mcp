@@ -158,35 +158,133 @@ function AgencyConsole() {
         </CardContent>
       </Card>
 
-      <Card>
-        <CardHeader>
-          <CardTitle>Team</CardTitle>
-          <CardDescription>Members of your agency.</CardDescription>
-        </CardHeader>
-        <CardContent>
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Email</TableHead>
-                <TableHead>Role</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {members.map((m) => (
-                <TableRow key={m.id}>
-                  <TableCell>{m.user.email}</TableCell>
-                  <TableCell>
-                    <Badge variant="muted">{m.role}</Badge>
-                  </TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        </CardContent>
-      </Card>
+      <TeamCard members={members} />
 
       <GrantsCard connections={connections} members={members} grants={grants} onChange={refresh} />
     </div>
+  );
+}
+
+interface Invitation {
+  id: string;
+  email: string;
+  role: string | null;
+  status: string;
+}
+
+function TeamCard({ members }: { members: Member[] }) {
+  const [invitations, setInvitations] = useState<Invitation[]>([]);
+  const [email, setEmail] = useState("");
+  const [role, setRole] = useState("member");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const loadInvitations = useCallback(async () => {
+    const res = await organization.listInvitations();
+    if (!res.error && res.data) {
+      setInvitations((res.data as Invitation[]).filter((i) => i.status === "pending"));
+    }
+  }, []);
+
+  useEffect(() => {
+    loadInvitations();
+  }, [loadInvitations]);
+
+  async function invite(e: React.FormEvent) {
+    e.preventDefault();
+    setBusy(true);
+    setError(null);
+    const res = await organization.inviteMember({ email, role: role as "member" | "admin" });
+    setBusy(false);
+    if (res.error) {
+      setError(res.error.message || "Could not send the invitation.");
+      return;
+    }
+    setEmail("");
+    await loadInvitations();
+  }
+
+  async function cancel(invitationId: string) {
+    setBusy(true);
+    await organization.cancelInvitation({ invitationId });
+    setBusy(false);
+    await loadInvitations();
+  }
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle>Team</CardTitle>
+        <CardDescription>Members of your agency and pending invitations.</CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        <form onSubmit={invite} className="flex flex-wrap items-end gap-3">
+          <div className="space-y-1.5">
+            <Label htmlFor="invite-email">Invite by email</Label>
+            <Input
+              id="invite-email"
+              type="email"
+              placeholder="colleague@agency.com"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              required
+            />
+          </div>
+          <div className="space-y-1.5">
+            <Label>Role</Label>
+            <select className={selectClass} value={role} onChange={(e) => setRole(e.target.value)}>
+              <option value="member">member</option>
+              <option value="admin">admin</option>
+            </select>
+          </div>
+          <Button type="submit" disabled={busy || !email}>
+            Send invite
+          </Button>
+        </form>
+        {error && <p className="text-sm text-[var(--destructive)]">{error}</p>}
+
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead>Email</TableHead>
+              <TableHead>Role</TableHead>
+              <TableHead>Status</TableHead>
+              <TableHead />
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {members.map((m) => (
+              <TableRow key={m.id}>
+                <TableCell>{m.user.email}</TableCell>
+                <TableCell>
+                  <Badge variant="muted">{m.role}</Badge>
+                </TableCell>
+                <TableCell>
+                  <Badge variant="muted">active</Badge>
+                </TableCell>
+                <TableCell />
+              </TableRow>
+            ))}
+            {invitations.map((i) => (
+              <TableRow key={i.id}>
+                <TableCell>{i.email}</TableCell>
+                <TableCell>
+                  <Badge variant="muted">{i.role ?? "member"}</Badge>
+                </TableCell>
+                <TableCell>
+                  <Badge>invited</Badge>
+                </TableCell>
+                <TableCell className="text-right">
+                  <Button variant="ghost" size="sm" onClick={() => cancel(i.id)} disabled={busy}>
+                    Cancel
+                  </Button>
+                </TableCell>
+              </TableRow>
+            ))}
+          </TableBody>
+        </Table>
+      </CardContent>
+    </Card>
   );
 }
 
