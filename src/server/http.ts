@@ -122,6 +122,42 @@ app.get("/metrics", async (req: Request, res: Response) => {
 
 // Admin-only audit trail for the caller's organization.
 const ADMIN_ROLES = new Set(["owner", "admin"]);
+
+// Force-logout: an org admin revokes all of a user's sessions (auth + live MCP).
+// Deletes Better Auth Session rows (kills cookie/bearer) and closes the user's
+// in-flight MCP transports. Body: { userId }.
+app.post("/admin/revoke-sessions", async (req: Request, res: Response) => {
+  const authCtx = await resolveAuthContext(req);
+  if (!authCtx) {
+    res.status(401).json({ error: "unauthorized" });
+    return;
+  }
+  if (!authCtx.orgId || !ADMIN_ROLES.has(authCtx.role ?? "")) {
+    res.status(403).json({ error: "forbidden", message: "Organization admin role required." });
+    return;
+  }
+  const targetUserId = typeof req.body?.userId === "string" ? req.body.userId : undefined;
+  if (!targetUserId) {
+    res.status(400).json({ error: "bad_request", message: "Body must include a userId string." });
+    return;
+  }
+  // Only revoke users who share the admin's organization (no cross-tenant reach).
+  const member = await prisma.member.findFirst({
+    where: { userId: targetUserId, organizationId: authCtx.orgId },
+    select: { id: true },
+  });
+  if (!member) {
+    res.status(404).json({ error: "not_found", message: "User is not a member of your organization." });
+    return;
+  }
+  const { count } = await prisma.session.deleteMany({ where: { userId: targetUserId } });
+  const closedMcp = await sessions.closeForUser(targetUserId);
+  logger.info(
+    { actor: authCtx.userId, targetUserId, authSessions: count, mcpSessions: closedMcp },
+    "admin revoked user sessions"
+  );
+  res.json({ userId: targetUserId, revokedAuthSessions: count, closedMcpSessions: closedMcp });
+});
 app.get("/audit", async (req: Request, res: Response) => {
   const authCtx = await resolveAuthContext(req);
   if (!authCtx) {

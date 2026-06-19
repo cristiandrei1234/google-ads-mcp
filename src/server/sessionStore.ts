@@ -75,6 +75,22 @@ export class SessionStore<T extends ClosableTransport = ClosableTransport> {
     return evicted;
   }
 
+  /**
+   * Close and drop every live session owned by `userId` (admin revocation /
+   * forced logout). Returns the number closed.
+   */
+  async closeForUser(userId: string): Promise<number> {
+    let closed = 0;
+    for (const [id, session] of this.sessions) {
+      if (session.ownerUserId === userId) {
+        this.sessions.delete(id);
+        closed += 1;
+        await this.safeClose(session.transport);
+      }
+    }
+    return closed;
+  }
+
   /** Close and drop all sessions (graceful shutdown). */
   async closeAll(): Promise<void> {
     const all = [...this.sessions.values()];

@@ -65,6 +65,23 @@ describe("SessionStore", () => {
     expect(store.size).toBe(0);
   });
 
+  it("closeForUser closes only that user's sessions", async () => {
+    const store = new SessionStore(() => 0);
+    const a1 = fakeTransport("a1");
+    const a2 = fakeTransport("a2");
+    const b1 = fakeTransport("b1");
+    store.add("a1", a1, "user-a");
+    store.add("a2", a2, "user-a");
+    store.add("b1", b1, "user-b");
+    const closed = await store.closeForUser("user-a");
+    expect(closed).toBe(2);
+    expect(store.size).toBe(1);
+    expect(a1.close).toHaveBeenCalled();
+    expect(a2.close).toHaveBeenCalled();
+    expect(b1.close).not.toHaveBeenCalled();
+    expect(store.getOwned("b1", "user-b")).not.toBeNull();
+  });
+
   it("closeAll closes and clears every session (tolerating close errors)", async () => {
     const store = new SessionStore(() => 0);
     const good = fakeTransport("a");
