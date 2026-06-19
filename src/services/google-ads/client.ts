@@ -1,7 +1,7 @@
 import { GoogleAdsApi } from 'google-ads-api';
 import config from '../../config/env.js';
 import logger from '../../observability/logger.js';
-import { getConnectionForCustomer } from '../db.js';
+import { getConnectionForCustomer, markConnectionReauthNeeded } from '../db.js';
 import { getIdentity } from '../../auth/identityContext.js';
 import { normalizeCustomerId } from './resourceNames.js';
 import { wrapCustomerWithResilience, type RetryConfig } from './retry.js';
@@ -79,7 +79,15 @@ export async function getCustomer(customerId: string, _ignoredUserId?: string) {
         refresh_token: resolved.refreshToken,
         login_customer_id: resolved.mccCustomerId,
       }),
-      resilienceConfig()
+      {
+        ...resilienceConfig(),
+        // Google rejected this connection's refresh token: flag it for re-link so
+        // it surfaces to an admin instead of failing every call silently.
+        onAuthError: () => {
+          logger.warn(`Connection ${resolved.connectionId} needs re-authentication (token rejected).`);
+          void markConnectionReauthNeeded(resolved.connectionId);
+        },
+      }
     );
   }
 

@@ -10,6 +10,7 @@
     "http": "node dist/server/http.js",
     "http:dev": "tsx watch src/server/http.ts",
     "generate-token": "tsx scripts/generate-refresh-token.ts",
+    "rotate-key": "tsx scripts/rotate-encryption-key.ts",
     "test:all-tools": "tsx scripts/test-all-tools.ts",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",

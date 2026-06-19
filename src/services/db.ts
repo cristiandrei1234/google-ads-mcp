@@ -97,6 +97,18 @@ export async function upsertConnection(input: CreateConnectionInput): Promise<Go
   });
 }
 
+/**
+ * Flag a connection as needing re-authentication after Google rejected its
+ * refresh token (invalid_grant). Surfaces in get_user_status / admin views so a
+ * human re-links it, instead of every tool call failing opaquely. Best-effort:
+ * a missing connection is ignored (it may have just been deleted).
+ */
+export async function markConnectionReauthNeeded(connectionId: string): Promise<void> {
+  await prisma.googleAdsConnection
+    .update({ where: { id: connectionId }, data: { status: "reauth_required" } })
+    .catch(() => undefined);
+}
+
 export interface ResolvedConnection {
   connectionId: string;
   mccCustomerId: string;

@@ -78,6 +78,10 @@ secrets are missing/invalid, so production never boots with a default key.
 | `TRUST_PROXY_HOPS` | optional | reverse-proxy hop count (default 1 = a single Caddy) |
 | `GOOGLE_ADS_REFRESH_TOKEN` / `GOOGLE_ADS_LOGIN_CUSTOMER_ID` | optional | single-operator stdio fallback |
 | `GOOGLE_ADS_VALIDATE_ONLY` | optional | global dry-run: all mutations run validate-only |
+| `GOOGLE_ADS_API_TIMEOUT_MS` | optional | per-attempt timeout for Google Ads API calls (default 60000) |
+| `GOOGLE_ADS_API_MAX_RETRIES` | optional | retries on transient (429/5xx/UNAVAILABLE/network) failures (default 3) |
+| `METRICS_TOKEN` | optional | bearer token for `GET /metrics`; unset = endpoint disabled (404) |
+| `SESSION_TTL_MS` / `SESSION_SWEEP_MS` | optional | MCP session inactivity expiry / sweep interval (default 30m / 60s) |
 | `MERCHANT_CENTER_ID`, `LOG_LEVEL` | optional | |
 
 Register `${BETTER_AUTH_URL}/api/auth/callback/google` as an authorized redirect
@@ -139,17 +143,56 @@ Claude-style remote MCP connectors discover authorization via the Better Auth
 - **Grant/revoke account access**: manage `AccountGrant` rows (admin tooling is a
   follow-up; see `docs/REPLATFORM.md`).
 - **Audit**: `GET /audit?limit=100[&customerId=...]` (org admin only).
-- **Key rotation**: generate a new `TOKEN_ENCRYPTION_KEY`, move the old key into
-  `TOKEN_ENCRYPTION_KEY_PREVIOUS` (comma-separated, decrypt-only). New writes use
-  the new key; existing tokens still decrypt via the previous key and are
-  re-encrypted on next write. Ciphertexts are versioned (`v1`/`v2`).
-- **Backup/restore**: backups land in `./backups`; restore with
-  `gunzip -c <file>.sql.gz | psql ...`. Sync `./backups` off-site for real DR.
+- **Health**: `GET /healthz` (liveness, always cheap) and `GET /health/ready`
+  (readiness — verifies Postgres answers; returns 503 when the DB is down so the
+  proxy stops routing). The prod compose health-checks `mcp` on `/health/ready`.
+- **Metrics**: `GET /metrics` (Prometheus) when `METRICS_TOKEN` is set — scrape
+  with `Authorization: Bearer $METRICS_TOKEN`. Exposes tool invocation
+  counts/latency, Google Ads API call duration, active sessions, and default
+  process metrics.
+- **Connection re-auth**: when Google rejects a connection's refresh token
+  (`invalid_grant`), it is flagged `status = reauth_required` so an admin re-links
+  it instead of every call failing opaquely.
+- **Key rotation**: generate a new `TOKEN_ENCRYPTION_KEY`, set the old key as
+  `TOKEN_ENCRYPTION_KEY_PREVIOUS` (comma-separated, decrypt-only), then run
+  `npm run rotate-key` (add `--dry-run` first) to re-encrypt every stored token
+  under the new key. Afterwards drop the old key from `_PREVIOUS` and restart.
+  New writes already use the new key; ciphertexts are versioned (`v1`/`v2`).
+- **Backup/restore**: backups land in `./backups` (daily `pg_dump`, 14-day
+  retention). Restore into a running Postgres with:
+  ```bash
+  gunzip -c ./backups/google_ads_mcp-<ts>.sql.gz \
+    | docker compose -f docker-compose.prod.yml exec -T postgres \
+        psql -U postgres -d google_ads_mcp
+  ```
+  Sync `./backups` off-site (S3/rsync) for real disaster recovery.
+
+### Common failures
+- **`/health/ready` returns 503 / "database: down"**: Postgres is unreachable or
+  the pool is exhausted. Check `docker compose logs postgres`; verify
+  `DATABASE_URL`; restart `postgres` then `mcp`.
+- **Tools fail with auth errors for one client**: that connection's token was
+  revoked (`status = reauth_required`) — have the owner re-link their MCC.
+- **Google Ads calls intermittently fail**: transient 429/5xx are retried
+  automatically; persistent 429 means you're hitting Google quota — slow the
+  cadence or raise `GOOGLE_ADS_API_MAX_RETRIES` cautiously.
+- **Container won't come up**: usually a failed `prisma migrate deploy` (check
+  `mcp` logs) or a fail-closed config error (missing `BETTER_AUTH_SECRET` /
+  `TOKEN_ENCRYPTION_KEY` / `BETTER_AUTH_URL`).
+
+### Pre-launch security checklist
+- [ ] `TOKEN_ENCRYPTION_KEY` and `BETTER_AUTH_SECRET` are fresh 32-byte randoms,
+      stored only in `.env.prod` (never committed).
+- [ ] `BETTER_AUTH_URL` is `https://` and `WEB_APP_ORIGIN` lists only real origins.
+- [ ] `METRICS_TOKEN` set (or `/metrics` intentionally disabled); `/metrics` and
+      `/audit` are not exposed publicly beyond the proxy.
+- [ ] `TRUST_PROXY_HOPS` matches your proxy chain (never trust the whole chain).
+- [ ] Backups verified restorable; `./backups` synced off-site.
 
 ## Tests
 
 ```bash
-npm test                 # vitest unit suite — 859 tests, offline (mocks)
+npm test                 # vitest unit suite — 944 tests, offline (mocks)
 npm run coverage         # same + coverage; gated at 100% (statements/branches/funcs/lines)
 npm run typecheck        # tsc --noEmit
 ```

@@ -217,6 +217,9 @@ model GoogleAdsConnection {
   /// Google OAuth refresh token, encrypted at rest (see src/services/crypto.ts).
   refreshTokenEnc String
   isAgencyRoot    Boolean      @default(false)
+  /// "active" | "reauth_required". Set to reauth_required when Google rejects
+  /// the refresh token (invalid_grant), so an admin is prompted to re-link.
+  status          String       @default("active")
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt

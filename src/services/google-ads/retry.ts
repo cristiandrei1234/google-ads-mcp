@@ -48,6 +48,23 @@ export function isTransientError(error: unknown): boolean {
   return false;
 }
 
+// gRPC UNAUTHENTICATED(16) / HTTP 401, or an OAuth refresh-token rejection.
+const AUTH_MESSAGE = /invalid_grant|unauthenticated|invalid credentials|token has been expired or revoked/i;
+
+/**
+ * Classify an error as an authentication failure — the stored OAuth refresh
+ * token was rejected (expired/revoked). Distinct from transient: retrying won't
+ * help; the connection must be re-linked.
+ */
+export function isAuthError(error: unknown): boolean {
+  if (!error || typeof error !== "object") return false;
+  const e = error as { code?: unknown; status?: unknown; response?: { status?: unknown }; message?: unknown };
+  if (e.code === 16) return true; // gRPC UNAUTHENTICATED
+  const status = e.status ?? e.response?.status;
+  if (status === 401) return true;
+  return typeof e.message === "string" && AUTH_MESSAGE.test(e.message);
+}
+
 export interface RetryConfig {
   /** Number of retries after the first attempt (total attempts = retries + 1). */
   retries?: number;
@@ -68,6 +85,8 @@ export interface RetryConfig {
   random?: () => number;
   /** Observability hook fired before each backoff sleep. */
   onRetry?: (info: { attempt: number; error: unknown; delayMs: number }) => void;
+  /** Fired once when a call fails with an authentication error (token rejected). */
+  onAuthError?: (error: unknown) => void;
 }
 
 function defaultSleep(ms: number): Promise<void> {
@@ -147,7 +166,14 @@ export function wrapCustomerWithResilience<T extends object>(customer: T, config
     const original = indexed[method];
     if (typeof original === "function") {
       indexed[method] = (...args: unknown[]) =>
-        withRetry(() => (original as (...a: unknown[]) => Promise<unknown>).apply(customer, args), config);
+        withRetry(() => (original as (...a: unknown[]) => Promise<unknown>).apply(customer, args), config).catch(
+          (error: unknown) => {
+            if (config.onAuthError && isAuthError(error)) {
+              config.onAuthError(error);
+            }
+            throw error;
+          }
+        );
     }
   }
   return customer;

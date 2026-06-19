@@ -1,6 +1,7 @@
 import { describe, it, expect, vi } from "vitest";
 import {
   isTransientError,
+  isAuthError,
   withRetry,
   wrapCustomerWithResilience,
   RetryTimeoutError,
@@ -41,6 +42,28 @@ describe("isTransientError", () => {
 
   it("returns false for an empty error object", () => {
     expect(isTransientError({})).toBe(false);
+  });
+});
+
+describe("isAuthError", () => {
+  it("rejects non-objects", () => {
+    expect(isAuthError(null)).toBe(false);
+    expect(isAuthError("x")).toBe(false);
+  });
+
+  it("matches gRPC UNAUTHENTICATED, HTTP 401, and token messages", () => {
+    expect(isAuthError({ code: 16 })).toBe(true);
+    expect(isAuthError({ status: 401 })).toBe(true);
+    expect(isAuthError({ response: { status: 401 } })).toBe(true);
+    expect(isAuthError({ message: "invalid_grant" })).toBe(true);
+    expect(isAuthError({ message: "Token has been expired or revoked." })).toBe(true);
+  });
+
+  it("does not match unrelated errors", () => {
+    expect(isAuthError({ code: 14 })).toBe(false);
+    expect(isAuthError({ status: 500 })).toBe(false);
+    expect(isAuthError({ message: "policy violation" })).toBe(false);
+    expect(isAuthError({})).toBe(false);
   });
 });
 
@@ -172,5 +195,21 @@ describe("wrapCustomerWithResilience", () => {
     const wrapped = wrapCustomerWithResilience(customer, { sleep: vi.fn(async () => {}), random: () => 0 });
     await expect(wrapped.query()).resolves.toBe("ok");
     expect(query).toHaveBeenCalledTimes(2);
+  });
+
+  it("fires onAuthError when the call fails with an auth error, then rethrows", async () => {
+    const onAuthError = vi.fn();
+    const query = vi.fn(async () => { throw { message: "invalid_grant" }; });
+    const wrapped = wrapCustomerWithResilience({ query }, { onAuthError, sleep: vi.fn(async () => {}) });
+    await expect(wrapped.query()).rejects.toMatchObject({ message: "invalid_grant" });
+    expect(onAuthError).toHaveBeenCalledTimes(1);
+  });
+
+  it("does not fire onAuthError for a non-auth failure", async () => {
+    const onAuthError = vi.fn();
+    const query = vi.fn(async () => { throw new Error("bad request"); });
+    const wrapped = wrapCustomerWithResilience({ query }, { onAuthError, sleep: vi.fn(async () => {}) });
+    await expect(wrapped.query()).rejects.toThrow("bad request");
+    expect(onAuthError).not.toHaveBeenCalled();
   });
 });

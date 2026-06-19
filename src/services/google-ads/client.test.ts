@@ -1,36 +1,43 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
 
 // ---- Hoisted mock state ----------------------------------------------------
-const { GoogleAdsApiMock, customerFactory, mockConfig, getConnectionForCustomer, getIdentity } =
-  vi.hoisted(() => {
-    const customerFactory = vi.fn((opts: unknown) => ({ __customer: opts }));
-    const GoogleAdsApiMock = vi.fn(function (this: any, args: unknown) {
-      this.__args = args;
-      this.Customer = customerFactory;
-    });
-    return {
-      GoogleAdsApiMock,
-      customerFactory,
-      mockConfig: {
-        GOOGLE_ADS_CLIENT_ID: "client-id-1234",
-        GOOGLE_ADS_CLIENT_SECRET: "secret-5678",
-        GOOGLE_ADS_DEVELOPER_TOKEN: "dev-token",
-        GOOGLE_ADS_REFRESH_TOKEN: undefined as string | undefined,
-        GOOGLE_ADS_LOGIN_CUSTOMER_ID: undefined as string | undefined,
-        GOOGLE_ADS_API_TIMEOUT_MS: undefined as number | undefined,
-        GOOGLE_ADS_API_MAX_RETRIES: undefined as number | undefined,
-      },
-      getConnectionForCustomer: vi.fn(),
-      getIdentity: vi.fn(),
-    };
+const {
+  GoogleAdsApiMock,
+  customerFactory,
+  mockConfig,
+  getConnectionForCustomer,
+  markConnectionReauthNeeded,
+  getIdentity,
+} = vi.hoisted(() => {
+  const customerFactory = vi.fn((opts: unknown) => ({ __customer: opts }));
+  const GoogleAdsApiMock = vi.fn(function (this: any, args: unknown) {
+    this.__args = args;
+    this.Customer = customerFactory;
   });
+  return {
+    GoogleAdsApiMock,
+    customerFactory,
+    mockConfig: {
+      GOOGLE_ADS_CLIENT_ID: "client-id-1234",
+      GOOGLE_ADS_CLIENT_SECRET: "secret-5678",
+      GOOGLE_ADS_DEVELOPER_TOKEN: "dev-token",
+      GOOGLE_ADS_REFRESH_TOKEN: undefined as string | undefined,
+      GOOGLE_ADS_LOGIN_CUSTOMER_ID: undefined as string | undefined,
+      GOOGLE_ADS_API_TIMEOUT_MS: undefined as number | undefined,
+      GOOGLE_ADS_API_MAX_RETRIES: undefined as number | undefined,
+    },
+    getConnectionForCustomer: vi.fn(),
+    markConnectionReauthNeeded: vi.fn(),
+    getIdentity: vi.fn(),
+  };
+});
 
 vi.mock("google-ads-api", () => ({ GoogleAdsApi: GoogleAdsApiMock }));
 vi.mock("../../config/env.js", () => ({ default: mockConfig }));
 vi.mock("../../observability/logger.js", () => ({
   default: { info: vi.fn(), error: vi.fn(), warn: vi.fn(), debug: vi.fn() },
 }));
-vi.mock("../db.js", () => ({ getConnectionForCustomer }));
+vi.mock("../db.js", () => ({ getConnectionForCustomer, markConnectionReauthNeeded }));
 vi.mock("../../auth/identityContext.js", () => ({
   getIdentity,
   runWithIdentity: (_c: unknown, f: () => unknown) => f(),
@@ -54,6 +61,7 @@ beforeEach(() => {
   mockConfig.GOOGLE_ADS_API_TIMEOUT_MS = undefined;
   mockConfig.GOOGLE_ADS_API_MAX_RETRIES = undefined;
   getConnectionForCustomer.mockReset();
+  markConnectionReauthNeeded.mockReset();
   getIdentity.mockReset();
 });
 
@@ -156,6 +164,22 @@ describe("getCustomer - multi-tenant (identity present)", () => {
     // on success), so the original is invoked and its value returned.
     await expect(customer.query("SELECT 1")).resolves.toBe("rows");
     expect(innerQuery).toHaveBeenCalledWith("SELECT 1");
+  });
+
+  it("flags the connection for re-auth when Google rejects its token", async () => {
+    getIdentity.mockReturnValue({ userId: "u1", orgId: "org1" });
+    getConnectionForCustomer.mockResolvedValue({
+      connectionId: "conn-9",
+      accessLevel: "WRITE",
+      refreshToken: "t",
+      mccCustomerId: "1",
+    });
+    const innerQuery = vi.fn(async () => { throw { message: "invalid_grant" }; });
+    customerFactory.mockReturnValueOnce({ query: innerQuery });
+    const { getCustomer } = await loadModule();
+    const customer = (await getCustomer("1234567890")) as { query: () => Promise<unknown> };
+    await expect(customer.query()).rejects.toMatchObject({ message: "invalid_grant" });
+    expect(markConnectionReauthNeeded).toHaveBeenCalledWith("conn-9");
   });
 
   it("ignores the caller-supplied userId argument (uses identity)", async () => {

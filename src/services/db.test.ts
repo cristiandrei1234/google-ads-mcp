@@ -18,6 +18,7 @@ process.env.GOOGLE_ADS_DEVELOPER_TOKEN = "devtoken";
 const m = vi.hoisted(() => ({
   upsertMock: vi.fn(),
   findManyMock: vi.fn(),
+  updateMock: vi.fn(),
   grantUpsertMock: vi.fn(),
   deleteManyMock: vi.fn(),
   grantFindFirstMock: vi.fn(),
@@ -28,6 +29,7 @@ const m = vi.hoisted(() => ({
 const {
   upsertMock,
   findManyMock,
+  updateMock,
   grantUpsertMock,
   deleteManyMock,
   grantFindFirstMock,
@@ -42,7 +44,7 @@ vi.mock("@prisma/adapter-pg", () => ({
 
 vi.mock("@prisma/client", () => ({
   PrismaClient: vi.fn(function (this: any) {
-    this.googleAdsConnection = { upsert: m.upsertMock, findMany: m.findManyMock };
+    this.googleAdsConnection = { upsert: m.upsertMock, findMany: m.findManyMock, update: m.updateMock };
     this.accountGrant = {
       findFirst: m.grantFindFirstMock,
       findMany: m.grantFindManyMock,
@@ -58,6 +60,7 @@ import prisma, {
   upsertConnection,
   getConnectionForCustomer,
   listConnectionsForUser,
+  markConnectionReauthNeeded,
   addGrant,
   removeGrant,
   getGrantLevel,
@@ -169,6 +172,22 @@ describe("upsertConnection", () => {
       organizationId: "o", ownerMemberId: "m", label: "L", mccCustomerId: "1", refreshToken: "t",
     });
     expect(upsertMock).toHaveBeenCalledTimes(2);
+  });
+});
+
+describe("markConnectionReauthNeeded", () => {
+  it("sets status to reauth_required for the connection", async () => {
+    updateMock.mockResolvedValue({ id: "c1", status: "reauth_required" });
+    await markConnectionReauthNeeded("c1");
+    expect(updateMock).toHaveBeenCalledWith({
+      where: { id: "c1" },
+      data: { status: "reauth_required" },
+    });
+  });
+
+  it("swallows errors (e.g. connection already deleted)", async () => {
+    updateMock.mockRejectedValue(new Error("record not found"));
+    await expect(markConnectionReauthNeeded("gone")).resolves.toBeUndefined();
   });
 });
 

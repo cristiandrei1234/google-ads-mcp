@@ -35,6 +35,18 @@ services:
     expose:
       - "3000" # internal only; Caddy is the public entrypoint
     command: ["sh", "-c", "npx prisma migrate deploy && node dist/server/http.js"]
+    healthcheck:
+      # Readiness probe (verifies the DB answers). Node 20 has global fetch, so
+      # no curl/wget needed in the slim image. Caddy stops routing to unhealthy.
+      test:
+        - "CMD"
+        - "node"
+        - "-e"
+        - "fetch('http://localhost:3000/health/ready').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
 
   caddy:
     image: caddy:2-alpine
