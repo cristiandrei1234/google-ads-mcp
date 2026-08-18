@@ -45,8 +45,9 @@ jobs:
       - run: npm ci
 
       - name: Dependency audit (fail on high/critical)
-        # Moderate transitive advisories are documented as accepted in the
-        # README; this gate blocks newly-introduced high/critical issues.
+        # The tree is currently clean at every severity; two advisories are held
+        # off by path-scoped overrides (see README). This gate blocks
+        # newly-introduced high/critical issues.
         run: npm audit --audit-level=high
 
       - name: Generate test secrets
