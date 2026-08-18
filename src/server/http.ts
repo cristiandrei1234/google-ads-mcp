@@ -9,7 +9,8 @@ import { isInitializeRequest } from "@modelcontextprotocol/sdk/types.js";
 import { auth } from "../auth/betterAuth.js";
 import { createMcpServer } from "../createServer.js";
 import { runWithIdentity, type AuthContext } from "../auth/identityContext.js";
-import prisma, {
+import {
+  getPrisma,
   upsertConnection,
   listConnectionsForOrg,
   getOrgConnection,
@@ -112,7 +113,7 @@ app.get("/healthz", (_req: Request, res: Response) => {
 // Readiness: can we actually serve traffic? Verifies Postgres answers. Returns
 // 503 when the DB is unreachable so the reverse proxy stops routing to us.
 app.get("/health/ready", async (_req: Request, res: Response) => {
-  const dbOk = await checkDatabase(prisma, logger);
+  const dbOk = await checkDatabase(getPrisma(), logger);
   res.status(dbOk ? 200 : 503).json({
     status: dbOk ? "ready" : "degraded",
     checks: { database: dbOk ? "ok" : "down" },
@@ -160,7 +161,7 @@ app.post("/admin/revoke-sessions", async (req: Request, res: Response) => {
     return;
   }
   // Only revoke users who share the admin's organization (no cross-tenant reach).
-  const member = await prisma.member.findFirst({
+  const member = await getPrisma().member.findFirst({
     where: { userId: targetUserId, organizationId: authCtx.orgId },
     select: { id: true },
   });
@@ -168,7 +169,7 @@ app.post("/admin/revoke-sessions", async (req: Request, res: Response) => {
     res.status(404).json({ error: "not_found", message: "User is not a member of your organization." });
     return;
   }
-  const { count } = await prisma.session.deleteMany({ where: { userId: targetUserId } });
+  const { count } = await getPrisma().session.deleteMany({ where: { userId: targetUserId } });
   const closedMcp = await sessions.closeForUser(targetUserId);
   logger.info(
     { actor: authCtx.userId, targetUserId, authSessions: count, mcpSessions: closedMcp },
@@ -188,7 +189,7 @@ app.get("/audit", async (req: Request, res: Response) => {
   }
   const limit = Math.min(Number(req.query.limit ?? 100) || 100, 500);
   const customerId = typeof req.query.customerId === "string" ? req.query.customerId.replace(/-/g, "") : undefined;
-  const logs = await prisma.auditLog.findMany({
+  const logs = await getPrisma().auditLog.findMany({
     where: { organizationId: authCtx.orgId, ...(customerId ? { customerId } : {}) },
     orderBy: { createdAt: "desc" },
     take: limit,
@@ -212,7 +213,7 @@ async function resolveAuthContext(req: Request): Promise<AuthContext | null> {
   let role: string | null = null;
 
   if (orgId) {
-    const member = await prisma.member.findFirst({
+    const member = await getPrisma().member.findFirst({
       where: { userId, organizationId: orgId },
       select: { id: true, role: true },
     });
@@ -465,6 +466,6 @@ installSignalHandlers({
   exit: (code) => process.exit(code),
   run: async () => {
     clearInterval(sweepTimer);
-    await shutdown({ server: httpServer, sessions, prisma, logger });
+    await shutdown({ server: httpServer, sessions, prisma: getPrisma(), logger });
   },
 });

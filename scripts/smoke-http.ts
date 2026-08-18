@@ -4,7 +4,7 @@
  *
  *   $env:DATABASE_URL=...local...; $env:PORT=3939; npx tsx scripts/smoke-http.ts
  */
-import prisma from "../src/services/db.js";
+import { getPrisma } from "../src/services/db.js";
 
 const PORT = process.env.PORT ?? "3939";
 const BASE = `http://localhost:${PORT}`;
@@ -64,7 +64,7 @@ async function main() {
       body: JSON.stringify({ email, password, name: "Smoke HTTP" }),
     });
     assert(signUp.ok, `sign-up should succeed, got ${signUp.status}: ${await signUp.text()}`);
-    const user = await prisma.user.update({ where: { email }, data: { emailVerified: true } });
+    const user = await getPrisma().user.update({ where: { email }, data: { emailVerified: true } });
 
     const signIn = await fetch(`${BASE}/api/auth/sign-in/email`, {
       method: "POST",
@@ -77,10 +77,10 @@ async function main() {
     console.log("✓ sign-up + sign-in issued a bearer token");
 
     // 3) make the caller an org admin and set the active org on their session(s)
-    const org = await prisma.organization.create({ data: { name: `Org ${email}` } });
+    const org = await getPrisma().organization.create({ data: { name: `Org ${email}` } });
     orgId = org.id;
-    await prisma.member.create({ data: { organizationId: org.id, userId: user.id, role: "admin" } });
-    await prisma.session.updateMany({ where: { userId: user.id }, data: { activeOrganizationId: org.id } });
+    await getPrisma().member.create({ data: { organizationId: org.id, userId: user.id, role: "admin" } });
+    await getPrisma().session.updateMany({ where: { userId: user.id }, data: { activeOrganizationId: org.id } });
 
     // 4) authenticated initialize -> 200 + mcp-session-id + x-request-id
     const init = await rpc(initBody, { token: token! });
@@ -115,7 +115,7 @@ async function main() {
     console.log(`✓ tools/list OK (${list.json.result.tools.length} tools); userId not advertised`);
 
     // 6) tools/call -> withRbac runs, writes an AuditLog row attributed to the org
-    const auditBefore = await prisma.auditLog.count({ where: { organizationId: org.id } });
+    const auditBefore = await getPrisma().auditLog.count({ where: { organizationId: org.id } });
     await rpc(
       { jsonrpc: "2.0", id: 3, method: "tools/call", params: { name: "list_accessible_accounts", arguments: {} } },
       { token: token!, sessionId }
@@ -124,10 +124,10 @@ async function main() {
     let auditAfter = auditBefore;
     for (let i = 0; i < 20 && auditAfter <= auditBefore; i++) {
       await new Promise((r) => setTimeout(r, 100));
-      auditAfter = await prisma.auditLog.count({ where: { organizationId: org.id } });
+      auditAfter = await getPrisma().auditLog.count({ where: { organizationId: org.id } });
     }
     assert(auditAfter === auditBefore + 1, `tool call should append one audit row (before ${auditBefore}, after ${auditAfter})`);
-    const row = await prisma.auditLog.findFirst({ where: { organizationId: org.id }, orderBy: { createdAt: "desc" } });
+    const row = await getPrisma().auditLog.findFirst({ where: { organizationId: org.id }, orderBy: { createdAt: "desc" } });
     assert(row?.tool === "list_accessible_accounts", "audit row records the tool");
     assert(row?.memberId && row?.userId === user.id, "audit row attributes member + user");
     console.log(`✓ authenticated tools/call -> AuditLog row (tool=${row!.tool}, outcome=${row!.outcome})`);
@@ -155,11 +155,11 @@ async function main() {
     console.log("\nALL HTTP E2E CHECKS PASSED");
   } finally {
     if (orgId) {
-      await prisma.auditLog.deleteMany({ where: { organizationId: orgId } });
-      await prisma.organization.deleteMany({ where: { id: orgId } });
+      await getPrisma().auditLog.deleteMany({ where: { organizationId: orgId } });
+      await getPrisma().organization.deleteMany({ where: { id: orgId } });
     }
-    await prisma.user.deleteMany({ where: { email } });
-    await prisma.$disconnect();
+    await getPrisma().user.deleteMany({ where: { email } });
+    await getPrisma().$disconnect();
   }
 }
 

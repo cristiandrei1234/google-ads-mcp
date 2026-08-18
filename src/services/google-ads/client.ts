@@ -1,7 +1,6 @@
 import { GoogleAdsApi } from 'google-ads-api';
 import config from '../../config/env.js';
 import logger from '../../observability/logger.js';
-import { getConnectionForCustomer, markConnectionReauthNeeded } from '../db.js';
 import { getIdentity } from '../../auth/identityContext.js';
 import { normalizeCustomerId } from './resourceNames.js';
 import { wrapCustomerWithResilience, type RetryConfig } from './retry.js';
@@ -65,6 +64,9 @@ export async function getCustomer(customerId: string, _ignoredUserId?: string) {
   const userId = getIdentity()?.userId;
 
   if (userId) {
+    // Imported on demand: the single-operator path below never touches the
+    // database, so it must not pay for loading Prisma either.
+    const { getConnectionForCustomer, markConnectionReauthNeeded } = await import('../db.js');
     const resolved = await getConnectionForCustomer(userId, normalizedCustomerId, getIdentity()?.orgId);
     if (!resolved) {
       throw new Error(

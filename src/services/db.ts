@@ -1,20 +1,32 @@
-import "dotenv/config";
 import { PrismaClient, type AccessLevel, type GoogleAdsConnection } from "@prisma/client";
 import { PrismaPg } from "@prisma/adapter-pg";
 import config from "../config/env.js";
 import { encryptSecret, decryptWithKeys, loadEncryptionKeys, type EncryptionKeys } from "./crypto.js";
 import { normalizeCustomerId } from "./google-ads/resourceNames.js";
 
-const connectionString = process.env.DATABASE_URL;
+let prismaInstance: PrismaClient | undefined;
 
-if (!connectionString) {
-  throw new Error("DATABASE_URL is required to initialize Prisma with PostgreSQL.");
+/**
+ * The Prisma client for multi-tenant mode, constructed on first use.
+ *
+ * Construction is deferred (rather than done at import time) so that importing
+ * this module does not itself require a database: the single-operator stdio
+ * server never reaches a call site, and therefore never needs DATABASE_URL.
+ * @throws {Error} when no DATABASE_URL is configured.
+ */
+export function getPrisma(): PrismaClient {
+  if (!prismaInstance) {
+    const connectionString = config.DATABASE_URL;
+    if (!connectionString) {
+      throw new Error(
+        "This feature requires DATABASE_URL (multi-tenant mode). Set a PostgreSQL " +
+        "connection string, or use single-operator mode with GOOGLE_ADS_REFRESH_TOKEN."
+      );
+    }
+    prismaInstance = new PrismaClient({ adapter: new PrismaPg({ connectionString }) });
+  }
+  return prismaInstance;
 }
-
-const adapter = new PrismaPg({ connectionString });
-const prisma = new PrismaClient({ adapter });
-
-export default prisma;
 
 let cachedKeys: EncryptionKeys | undefined;
 
@@ -73,7 +85,7 @@ export async function upsertConnection(input: CreateConnectionInput): Promise<Go
     getEncryptionKeys().primary,
     connectionAad(input.organizationId, mccCustomerId)
   );
-  return prisma.googleAdsConnection.upsert({
+  return getPrisma().googleAdsConnection.upsert({
     where: {
       organizationId_mccCustomerId: {
         organizationId: input.organizationId,
@@ -104,7 +116,7 @@ export async function upsertConnection(input: CreateConnectionInput): Promise<Go
  * a missing connection is ignored (it may have just been deleted).
  */
 export async function markConnectionReauthNeeded(connectionId: string): Promise<void> {
-  await prisma.googleAdsConnection
+  await getPrisma().googleAdsConnection
     .update({ where: { id: connectionId }, data: { status: "reauth_required" } })
     .catch(() => undefined);
 }
@@ -130,7 +142,7 @@ export async function getConnectionForCustomer(
   orgId?: string | null
 ): Promise<ResolvedConnection | null> {
   const normalizedCustomerId = normalizeCustomerId(customerId);
-  const grant = await prisma.accountGrant.findFirst({
+  const grant = await getPrisma().accountGrant.findFirst({
     where: {
       customerId: normalizedCustomerId,
       member: { userId, ...(orgId ? { organizationId: orgId } : {}) },
@@ -156,7 +168,7 @@ export async function listConnectionsForUser(
   userId: string,
   orgId?: string | null
 ): Promise<Array<{ connectionId: string; mccCustomerId: string; refreshToken: string; label: string }>> {
-  const connections = await prisma.googleAdsConnection.findMany({
+  const connections = await getPrisma().googleAdsConnection.findMany({
     where: { owner: { userId, ...(orgId ? { organizationId: orgId } : {}) } },
     orderBy: { createdAt: "asc" },
   });
@@ -171,7 +183,7 @@ export async function listConnectionsForUser(
 
 /** List an org's connections (no secrets) for admin/onboarding views. */
 export async function listConnectionsForOrg(organizationId: string) {
-  return prisma.googleAdsConnection.findMany({
+  return getPrisma().googleAdsConnection.findMany({
     where: { organizationId },
     select: {
       id: true,
@@ -191,7 +203,7 @@ export async function getOrgConnection(
   connectionId: string,
   organizationId: string
 ): Promise<ResolvedConnection | null> {
-  const connection = await prisma.googleAdsConnection.findFirst({
+  const connection = await getPrisma().googleAdsConnection.findFirst({
     where: { id: connectionId, organizationId },
   });
   if (!connection) {
@@ -207,7 +219,7 @@ export async function getOrgConnection(
 
 /** List an org's members (for assigning grants in the admin UI). */
 export async function listOrgMembers(organizationId: string) {
-  return prisma.member.findMany({
+  return getPrisma().member.findMany({
     where: { organizationId },
     select: {
       id: true,
@@ -221,7 +233,7 @@ export async function listOrgMembers(organizationId: string) {
 
 /** True iff a member belongs to the given organization. */
 export async function memberInOrg(memberId: string, organizationId: string): Promise<boolean> {
-  const member = await prisma.member.findFirst({
+  const member = await getPrisma().member.findFirst({
     where: { id: memberId, organizationId },
     select: { id: true },
   });
@@ -241,7 +253,7 @@ export interface AddGrantInput {
 
 export async function addGrant(input: AddGrantInput) {
   const customerId = normalizeCustomerId(input.customerId);
-  return prisma.accountGrant.upsert({
+  return getPrisma().accountGrant.upsert({
     where: {
       memberId_connectionId_customerId: {
         memberId: input.memberId,
@@ -261,7 +273,7 @@ export async function addGrant(input: AddGrantInput) {
 
 /** List all grants in an org (joined with member email + connection label) for the admin UI. */
 export async function listGrantsForOrg(organizationId: string) {
-  const grants = await prisma.accountGrant.findMany({
+  const grants = await getPrisma().accountGrant.findMany({
     where: { connection: { organizationId } },
     select: {
       memberId: true,
@@ -284,7 +296,7 @@ export async function listGrantsForOrg(organizationId: string) {
 }
 
 export async function removeGrant(memberId: string, connectionId: string, customerId: string) {
-  return prisma.accountGrant.deleteMany({
+  return getPrisma().accountGrant.deleteMany({
     where: { memberId, connectionId, customerId: normalizeCustomerId(customerId) },
   });
 }
@@ -295,7 +307,7 @@ export async function getGrantLevel(
   customerId: string,
   orgId?: string | null
 ): Promise<AccessLevel | null> {
-  const grant = await prisma.accountGrant.findFirst({
+  const grant = await getPrisma().accountGrant.findFirst({
     where: {
       customerId: normalizeCustomerId(customerId),
       member: { userId, ...(orgId ? { organizationId: orgId } : {}) },
@@ -308,7 +320,7 @@ export async function getGrantLevel(
 
 /** All client customerIds a user may act on within the active org (or across all). */
 export async function reachableCustomerIds(userId: string, orgId?: string | null): Promise<string[]> {
-  const grants = await prisma.accountGrant.findMany({
+  const grants = await getPrisma().accountGrant.findMany({
     where: { member: { userId, ...(orgId ? { organizationId: orgId } : {}) } },
     select: { customerId: true },
     distinct: ["customerId"],
@@ -333,7 +345,7 @@ export interface AuditEntry {
 }
 
 export async function appendAuditLog(entry: AuditEntry) {
-  return prisma.auditLog.create({
+  return getPrisma().auditLog.create({
     data: {
       organizationId: entry.organizationId,
       memberId: entry.memberId ?? null,
@@ -353,7 +365,7 @@ export async function appendAuditLog(entry: AuditEntry) {
 // ---------------------------------------------------------------------------
 
 export async function getUserStatusData(userId: string) {
-  const user = await prisma.user.findUnique({
+  const user = await getPrisma().user.findUnique({
     where: { id: userId },
     include: {
       members: {

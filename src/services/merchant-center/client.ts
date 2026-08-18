@@ -1,7 +1,6 @@
 import { google } from 'googleapis';
 import config from '../../config/env.js';
 import logger from '../../observability/logger.js';
-import { getConnectionForCustomer } from '../db.js';
 import { getIdentity } from '../../auth/identityContext.js';
 
 const authClientCache = new Map<string, any>();
@@ -31,6 +30,8 @@ export async function getMerchantAuth(customerId?: string) {
     if (!customerId) {
       throw new Error("A customerId you hold a grant for is required to access Merchant Center.");
     }
+    // Imported on demand — see the note in ../google-ads/client.ts.
+    const { getConnectionForCustomer } = await import('../db.js');
     const resolved = await getConnectionForCustomer(identity.userId, customerId, identity.orgId);
     if (!resolved) {
       throw new Error(`No grant for customer ${customerId}; Merchant Center access denied.`);

@@ -1,14 +1,15 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
 
-const { getUserStatusData, findMany } = vi.hoisted(() => ({
-  getUserStatusData: vi.fn(),
-  findMany: vi.fn(),
-}));
+const { getUserStatusData, findMany, getPrisma } = vi.hoisted(() => {
+  const findMany = vi.fn();
+  return {
+    getUserStatusData: vi.fn(),
+    findMany,
+    getPrisma: vi.fn(() => ({ user: { findMany } })),
+  };
+});
 
-vi.mock("../services/db.js", () => ({
-  default: { user: { findMany } },
-  getUserStatusData,
-}));
+vi.mock("../services/db.js", () => ({ getPrisma, getUserStatusData }));
 
 import { getUserStatus, listUsers, GetUserStatusToolSchema } from "./admin.js";
 

@@ -9,7 +9,7 @@
  * Better Auth server API and confirming the row lands in the DB. Cleans up.
  */
 import { auth } from "../src/auth/betterAuth.js";
-import prisma from "../src/services/db.js";
+import { getPrisma } from "../src/services/db.js";
 
 function assert(cond: unknown, msg: string): asserts cond {
   if (!cond) throw new Error(`ASSERT FAILED: ${msg}`);
@@ -28,16 +28,16 @@ async function main() {
       body: { email, password: "correct-horse-battery", name: "Smoke Auth" },
     });
 
-    const user = await prisma.user.findUnique({ where: { email } });
+    const user = await getPrisma().user.findUnique({ where: { email } });
     assert(user !== null, "user row created via Better Auth + Prisma adapter");
-    const account = await prisma.account.findFirst({ where: { userId: user!.id, providerId: "credential" } });
+    const account = await getPrisma().account.findFirst({ where: { userId: user!.id, providerId: "credential" } });
     assert(account !== null, "credential account row created (password stored)");
     console.log("✓ email/password sign-up persisted through the adapter on live PG");
 
     console.log("\nALL AUTH SMOKE CHECKS PASSED");
   } finally {
-    await prisma.user.deleteMany({ where: { email } });
-    await prisma.$disconnect();
+    await getPrisma().user.deleteMany({ where: { email } });
+    await getPrisma().$disconnect();
   }
 }
 

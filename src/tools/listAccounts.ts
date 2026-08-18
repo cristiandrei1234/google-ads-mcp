@@ -2,7 +2,6 @@ import { z } from "zod";
 import { getClient } from "../services/google-ads/client.js";
 import logger from "../observability/logger.js";
 import config from "../config/env.js";
-import { listConnectionsForUser, reachableCustomerIds } from "../services/db.js";
 import { getIdentity } from "../auth/identityContext.js";
 
 export const ListAccountsSchema = z.object({});
@@ -70,6 +69,8 @@ export async function listAccounts(_args: z.infer<typeof ListAccountsSchema> = {
   logger.info(`Listing accessible accounts${userId ? ` for user ${userId}` : ""}`);
 
   if (userId) {
+    // Imported on demand so the env-token path stays free of Prisma.
+    const { listConnectionsForUser, reachableCustomerIds } = await import("../services/db.js");
     const orgId = getIdentity()?.orgId;
     // Grants are the authoritative scope. Discovery may only NARROW this set,
     // never reveal accounts the user has no grant for.

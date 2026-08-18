@@ -9,7 +9,7 @@
  * verifies the redirect is built + auth-gated, and seeds a connection directly
  * to exercise the admin endpoints end to end. Cleans up what it creates.
  */
-import prisma, { upsertConnection } from "../src/services/db.js";
+import { getPrisma, upsertConnection } from "../src/services/db.js";
 
 const PORT = process.env.PORT ?? "3939";
 const BASE = `http://localhost:${PORT}`;
@@ -29,7 +29,7 @@ async function main() {
       headers: { "Content-Type": "application/json", Origin: ORIGIN },
       body: JSON.stringify({ email, password, name: "Smoke Connect" }),
     });
-    const user = await prisma.user.update({ where: { email }, data: { emailVerified: true } });
+    const user = await getPrisma().user.update({ where: { email }, data: { emailVerified: true } });
     const signIn = await fetch(`${BASE}/api/auth/sign-in/email`, {
       method: "POST",
       headers: { "Content-Type": "application/json", Origin: ORIGIN },
@@ -38,10 +38,10 @@ async function main() {
     const token = signIn.headers.get("set-auth-token");
     assert(token, "got a bearer token");
 
-    const org = await prisma.organization.create({ data: { name: `Org ${email}` } });
+    const org = await getPrisma().organization.create({ data: { name: `Org ${email}` } });
     orgId = org.id;
-    const member = await prisma.member.create({ data: { organizationId: org.id, userId: user.id, role: "admin" } });
-    await prisma.session.updateMany({ where: { userId: user.id }, data: { activeOrganizationId: org.id } });
+    const member = await getPrisma().member.create({ data: { organizationId: org.id, userId: user.id, role: "admin" } });
+    await getPrisma().session.updateMany({ where: { userId: user.id }, data: { activeOrganizationId: org.id } });
     const auth = { Authorization: `Bearer ${token}`, "Content-Type": "application/json" };
 
     // Seed a connection (simulating a completed OAuth connect).
@@ -107,20 +107,20 @@ async function main() {
       body: JSON.stringify({ email: `invitee-${process.pid}@example.test`, role: "member", organizationId: org.id }),
     });
     assert(invite.ok, `invite-member should succeed, got ${invite.status}: ${await invite.clone().text()}`);
-    const invitationCount = await prisma.invitation.count({ where: { organizationId: org.id, status: "pending" } });
+    const invitationCount = await getPrisma().invitation.count({ where: { organizationId: org.id, status: "pending" } });
     assert(invitationCount === 1, `one pending invitation expected, got ${invitationCount}`);
     console.log("✓ POST /api/auth/organization/invite-member -> pending invitation created");
 
     console.log("\nALL CONNECT/ONBOARDING SMOKE CHECKS PASSED");
   } finally {
     if (orgId) {
-      await prisma.accountGrant.deleteMany({ where: { connection: { organizationId: orgId } } });
-      await prisma.googleAdsConnection.deleteMany({ where: { organizationId: orgId } });
-      await prisma.member.deleteMany({ where: { organizationId: orgId } });
-      await prisma.organization.deleteMany({ where: { id: orgId } });
+      await getPrisma().accountGrant.deleteMany({ where: { connection: { organizationId: orgId } } });
+      await getPrisma().googleAdsConnection.deleteMany({ where: { organizationId: orgId } });
+      await getPrisma().member.deleteMany({ where: { organizationId: orgId } });
+      await getPrisma().organization.deleteMany({ where: { id: orgId } });
     }
-    await prisma.user.deleteMany({ where: { email } });
-    await prisma.$disconnect();
+    await getPrisma().user.deleteMany({ where: { email } });
+    await getPrisma().$disconnect();
   }
 }
 

@@ -2,8 +2,8 @@ import { describe, it, expect, beforeEach, vi } from "vitest";
 
 // ---------------------------------------------------------------------------
 // Env must be valid BEFORE the module graph (config/env.ts) is imported, since
-// env.ts parses process.env at load time and db.ts reads DATABASE_URL eagerly.
-// A real 32-byte base64 key lets the crypto path encrypt/decrypt for real.
+// env.ts parses process.env at load time. A real 32-byte base64 key lets the
+// crypto path encrypt/decrypt for real.
 // ---------------------------------------------------------------------------
 const KEY_B64 = Buffer.alloc(32, 7).toString("base64");
 process.env.DATABASE_URL = "postgresql://user:pass@localhost:5432/testdb";
@@ -68,7 +68,8 @@ vi.mock("@prisma/client", () => ({
   }),
 }));
 
-import prisma, {
+import {
+  getPrisma,
   upsertConnection,
   getConnectionForCustomer,
   listConnectionsForUser,
@@ -94,10 +95,6 @@ import config from "../config/env.js";
 // (dotenv precedence can otherwise make our local KEY_B64 diverge).
 const KEY = loadEncryptionKey(config.TOKEN_ENCRYPTION_KEY ?? KEY_B64);
 
-// PrismaPg + PrismaClient are constructed at import time; capture those calls
-// before beforeEach's clearAllMocks() wipes them.
-const adapterCallAtImport = (PrismaPg as any).mock.calls[0]?.[0];
-
 /** Build a versioned v2 ciphertext bound to a connection's AAD. */
 function encConnToken(plaintext: string, organizationId: string, mccCustomerId: string): string {
   return encryptSecret(plaintext, KEY, `conn:${organizationId}:${mccCustomerId}`);
@@ -107,31 +104,36 @@ beforeEach(() => {
   vi.clearAllMocks();
 });
 
-describe("db: module init", () => {
-  it("constructs Prisma with the PrismaPg adapter from DATABASE_URL", () => {
-    expect(prisma).toBeDefined();
-    // db.ts builds the adapter from the resolved DATABASE_URL at import time.
-    expect(adapterCallAtImport).toBeTruthy();
-    expect(typeof adapterCallAtImport.connectionString).toBe("string");
-    expect(adapterCallAtImport.connectionString).toMatch(/^postgres/);
+describe("db: lazy Prisma init", () => {
+  // MUST stay the first test in the file: getPrisma() memoises per module
+  // instance, so this is the only point where the construction is observable.
+  it("constructs Prisma once, with a PrismaPg adapter from DATABASE_URL", () => {
+    const client = getPrisma();
+    expect(client).toBeDefined();
+    const adapterCall = (PrismaPg as any).mock.calls[0]?.[0];
+    expect(adapterCall).toBeTruthy();
+    expect(typeof adapterCall.connectionString).toBe("string");
+    expect(adapterCall.connectionString).toMatch(/^postgres/);
+    // Memoised: a second call reuses the instance instead of reconnecting.
+    expect(getPrisma()).toBe(client);
+    expect((PrismaPg as any).mock.calls).toHaveLength(1);
   });
 
-  it("throws at import when DATABASE_URL is unset", async () => {
+  it("throws on first use when DATABASE_URL is unset", async () => {
     vi.resetModules();
     // Bypass env.ts's own parse (which would otherwise throw first), and the
     // heavy boundaries, so we exercise db.ts's own guard in isolation.
     vi.doMock("../config/env.js", () => ({ default: { TOKEN_ENCRYPTION_KEY: KEY_B64 } }));
     vi.doMock("@prisma/client", () => ({ PrismaClient: vi.fn() }));
     vi.doMock("@prisma/adapter-pg", () => ({ PrismaPg: vi.fn() }));
-    vi.doMock("dotenv/config", () => ({}));
-    const prev = process.env.DATABASE_URL;
-    delete process.env.DATABASE_URL;
     try {
-      await expect(import("./db.js")).rejects.toThrow(/DATABASE_URL is required/);
+      // Importing must NOT throw any more — only reaching a call site does.
+      const { getPrisma: freshGetPrisma } = await import("./db.js");
+      expect(() => freshGetPrisma()).toThrow(/requires DATABASE_URL/);
     } finally {
-      process.env.DATABASE_URL = prev;
       vi.doUnmock("../config/env.js");
-      vi.doUnmock("dotenv/config");
+      vi.doUnmock("@prisma/client");
+      vi.doUnmock("@prisma/adapter-pg");
       vi.resetModules();
     }
   });

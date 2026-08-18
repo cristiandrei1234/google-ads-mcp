@@ -1,8 +1,20 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
+import os from "node:os";
+import path from "node:path";
+
+const { dotenvConfig, existsSync } = vi.hoisted(() => ({
+  dotenvConfig: vi.fn(),
+  existsSync: vi.fn(() => false),
+}));
 
 // Keep dotenv from loading the repo's real .env into process.env during tests
-// (we control every variable explicitly via stubEnv for determinism).
-vi.mock("dotenv", () => ({ default: { config: vi.fn() }, config: vi.fn() }));
+// (we control every variable explicitly via stubEnv for determinism), and drive
+// the .env resolution cascade through a stubbed filesystem.
+vi.mock("dotenv", () => ({ default: { config: dotenvConfig }, config: dotenvConfig }));
+vi.mock("node:fs", () => ({ default: { existsSync }, existsSync }));
+
+/** The `~/.config/google-ads-mcp/.env` candidate, as env.ts computes it. */
+const USER_CONFIG_ENV = path.join(os.homedir(), ".config", "google-ads-mcp", ".env");
 
 const REQUIRED = {
   DATABASE_URL: "postgres://user:pass@localhost:5432/db",
@@ -18,6 +30,7 @@ const KEY32 = Buffer.alloc(32, 7).toString("base64");
 function resetEnv(overrides: Record<string, string | undefined> = {}): void {
   const keys = [
     "DATABASE_URL",
+    "GOOGLE_ADS_MCP_ENV",
     "GOOGLE_ADS_CLIENT_ID",
     "GOOGLE_ADS_CLIENT_SECRET",
     "GOOGLE_ADS_DEVELOPER_TOKEN",
@@ -49,6 +62,9 @@ async function loadEnv(overrides: Record<string, string | undefined> = {}) {
 
 beforeEach(() => {
   vi.resetModules();
+  dotenvConfig.mockClear();
+  existsSync.mockReset();
+  existsSync.mockReturnValue(false);
 });
 
 afterEach(() => {
@@ -176,9 +192,82 @@ describe("env config parsing", () => {
   it("rejects an invalid EMAIL_VERIFICATION enum value", async () => {
     await expect(loadEnv({ EMAIL_VERIFICATION: "maybe" })).rejects.toThrow();
   });
+
+  it("boots without DATABASE_URL when a refresh token provides single-operator credentials", async () => {
+    const { default: config } = await loadEnv({
+      DATABASE_URL: undefined,
+      GOOGLE_ADS_REFRESH_TOKEN: "rt",
+    });
+    expect(config.DATABASE_URL).toBeUndefined();
+    expect(config.GOOGLE_ADS_REFRESH_TOKEN).toBe("rt");
+  });
+
+  it("rejects an env with neither DATABASE_URL nor GOOGLE_ADS_REFRESH_TOKEN", async () => {
+    await expect(loadEnv({ DATABASE_URL: undefined })).rejects.toThrow(
+      /No credential source configured/
+    );
+  });
+});
+
+describe("hasDatabase", () => {
+  it("is true when DATABASE_URL is configured", async () => {
+    const { hasDatabase } = await loadEnv();
+    expect(hasDatabase()).toBe(true);
+  });
+
+  it("is false in single-operator mode", async () => {
+    const { hasDatabase } = await loadEnv({
+      DATABASE_URL: undefined,
+      GOOGLE_ADS_REFRESH_TOKEN: "rt",
+    });
+    expect(hasDatabase()).toBe(false);
+  });
+});
+
+describe(".env resolution cascade", () => {
+  it("prefers $GOOGLE_ADS_MCP_ENV over every other candidate", async () => {
+    const override = path.join(os.tmpdir(), "custom.env");
+    existsSync.mockReturnValue(true); // every candidate exists
+    await loadEnv({ GOOGLE_ADS_MCP_ENV: override });
+    expect(dotenvConfig).toHaveBeenCalledTimes(1);
+    expect(dotenvConfig).toHaveBeenCalledWith({ path: override, quiet: true });
+  });
+
+  it("falls back to the user config directory when no override is set", async () => {
+    existsSync.mockReturnValue(true);
+    await loadEnv();
+    expect(dotenvConfig).toHaveBeenCalledTimes(1);
+    expect(dotenvConfig).toHaveBeenCalledWith({ path: USER_CONFIG_ENV, quiet: true });
+  });
+
+  it("falls back to the package-relative .env as a last resort", async () => {
+    existsSync.mockImplementation((candidate: string) => candidate !== USER_CONFIG_ENV);
+    await loadEnv();
+    expect(dotenvConfig).toHaveBeenCalledTimes(1);
+    const [{ path: used, quiet }] = dotenvConfig.mock.calls[0] as [{ path: string; quiet: boolean }];
+    expect(used).not.toBe(USER_CONFIG_ENV);
+    expect(used.endsWith(".env")).toBe(true);
+    expect(quiet).toBe(true); // never print to stdout: it is the JSON-RPC stream
+  });
+
+  it("loads no file when none of the candidates exist", async () => {
+    await loadEnv();
+    expect(dotenvConfig).not.toHaveBeenCalled();
+  });
 });
 
 describe("assertHttpServerConfig", () => {
+  it("requires DATABASE_URL, so multi-tenant mode stays fail-closed", async () => {
+    const { assertHttpServerConfig } = await loadEnv({
+      DATABASE_URL: undefined,
+      GOOGLE_ADS_REFRESH_TOKEN: "rt",
+      BETTER_AUTH_SECRET: "y".repeat(32),
+      TOKEN_ENCRYPTION_KEY: KEY32,
+      BETTER_AUTH_URL: "http://localhost:3000",
+    });
+    expect(() => assertHttpServerConfig()).toThrow(/DATABASE_URL is required/);
+  });
+
   it("throws listing all missing fields when nothing is configured", async () => {
     const { assertHttpServerConfig } = await loadEnv();
     expect(() => assertHttpServerConfig()).toThrow(/Invalid HTTP server configuration/);

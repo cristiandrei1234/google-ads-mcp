@@ -1,22 +1,42 @@
 import dotenv from 'dotenv';
 import { z } from 'zod';
 import { fileURLToPath } from 'node:url';
+import fs from 'node:fs';
+import os from 'node:os';
 import path from 'node:path';
 
-// Load .env by an absolute path derived from this module's location (project
-// root is two levels up from src/config or dist/config), so the server works
-// regardless of the launcher's working directory (e.g. Claude Desktop spawns
-// it from System32). `quiet` suppresses dotenv's stdout banner, which would
-// otherwise corrupt the stdio MCP JSON-RPC stream.
+// Load .env from the first candidate that exists, so the server works
+// regardless of the launcher's working directory (e.g. Claude Desktop spawns it
+// from System32) AND when the package is installed globally or run via `npx`,
+// where the package-relative path resolves inside node_modules. Variables
+// already present in process.env always win: dotenv never overwrites them, and
+// MCP clients inject their configuration exactly that way. `quiet` suppresses
+// dotenv's stdout banner, which would otherwise corrupt the stdio MCP JSON-RPC
+// stream.
 const moduleDir = path.dirname(fileURLToPath(import.meta.url));
-dotenv.config({ path: path.resolve(moduleDir, '../../.env'), quiet: true });
+const ENV_FILE_CANDIDATES = [
+  process.env.GOOGLE_ADS_MCP_ENV,
+  path.join(os.homedir(), '.config', 'google-ads-mcp', '.env'),
+  // Project root is two levels up from src/config (or dist/config).
+  path.resolve(moduleDir, '../../.env'),
+];
+for (const candidate of ENV_FILE_CANDIDATES) {
+  if (candidate && fs.existsSync(candidate)) {
+    dotenv.config({ path: candidate, quiet: true });
+    break;
+  }
+}
 
 const envSchema = z.object({
+  // Optional: only multi-tenant mode (HTTP transport, orgs, grants, audit) needs
+  // Postgres. Single-operator stdio runs on GOOGLE_ADS_REFRESH_TOKEN alone and
+  // never opens a connection, so requiring it here would block that mode.
   DATABASE_URL: z
     .string()
-    .transform(s => s.trim())
+    .optional()
+    .transform(s => s?.trim())
     .refine(
-      s => s.startsWith('postgres://') || s.startsWith('postgresql://'),
+      s => s === undefined || s.startsWith('postgres://') || s.startsWith('postgresql://'),
       'DATABASE_URL must be a PostgreSQL connection string'
     ),
   GOOGLE_ADS_CLIENT_ID: z.string().transform(s => s.trim()),
@@ -71,6 +91,19 @@ const envSchema = z.object({
   RESEND_API_KEY: z.string().optional().transform(s => s?.trim()),
   EMAIL_FROM: z.string().optional().transform(s => s?.trim()),
   EMAIL_VERIFICATION: z.enum(['on', 'off']).optional(),
+}).superRefine((env, ctx) => {
+  // Every mode needs a credential source. Without either variable the server
+  // would boot and then fail on the first tool call, which is far harder to
+  // diagnose than refusing to start.
+  if (!env.DATABASE_URL && !env.GOOGLE_ADS_REFRESH_TOKEN) {
+    ctx.addIssue({
+      code: 'custom',
+      path: ['GOOGLE_ADS_REFRESH_TOKEN'],
+      message:
+        'No credential source configured: set GOOGLE_ADS_REFRESH_TOKEN for ' +
+        'single-operator (stdio) mode, or DATABASE_URL for multi-tenant mode.',
+    });
+  }
 });
 
 export type Config = z.infer<typeof envSchema>;
@@ -86,6 +119,9 @@ export default config;
  */
 export function assertHttpServerConfig(): void {
   const problems: string[] = [];
+  if (!config.DATABASE_URL) {
+    problems.push('DATABASE_URL is required (PostgreSQL connection string).');
+  }
   if (!config.BETTER_AUTH_SECRET) {
     problems.push('BETTER_AUTH_SECRET is required (>=32 chars; openssl rand -base64 32).');
   }
@@ -100,4 +136,16 @@ export function assertHttpServerConfig(): void {
   if (problems.length > 0) {
     throw new Error(`Invalid HTTP server configuration:\n  - ${problems.join('\n  - ')}`);
   }
+}
+
+/**
+ * True when a database is configured, i.e. the multi-tenant features
+ * (organizations, grants, audit trail, admin tools) can work at all.
+ *
+ * It lives here rather than in the Prisma module on purpose: callers use it to
+ * decide whether to touch that module, and importing it from there would load
+ * `@prisma/client` into the single-operator process just to ask the question.
+ */
+export function hasDatabase(): boolean {
+  return Boolean(config.DATABASE_URL);
 }

@@ -8,7 +8,7 @@
  * a grant for, ignores any caller-supplied userId, and falls back to env when
  * there is no identity. No network/Google calls (api.Customer is local).
  */
-import prisma, { upsertConnection, addGrant, getGrantLevel } from "../src/services/db.js";
+import { getPrisma, upsertConnection, addGrant, getGrantLevel } from "../src/services/db.js";
 import { getCustomer } from "../src/services/google-ads/client.js";
 import { runWithIdentity } from "../src/auth/identityContext.js";
 
@@ -22,10 +22,10 @@ async function main() {
   const UNGRANTED = "222-222-2222";
   let orgId = "";
   try {
-    const user = await prisma.user.create({ data: { email: `${stamp}@example.test`, name: "Id" } });
-    const org = await prisma.organization.create({ data: { name: `Org ${stamp}` } });
+    const user = await getPrisma().user.create({ data: { email: `${stamp}@example.test`, name: "Id" } });
+    const org = await getPrisma().organization.create({ data: { name: `Org ${stamp}` } });
     orgId = org.id;
-    const member = await prisma.member.create({
+    const member = await getPrisma().member.create({
       data: { organizationId: org.id, userId: user.id, role: "member" },
     });
     const connection = await upsertConnection({
@@ -82,9 +82,9 @@ async function main() {
 
     console.log("\nALL IDENTITY SMOKE CHECKS PASSED");
   } finally {
-    if (orgId) await prisma.organization.deleteMany({ where: { id: orgId } });
-    await prisma.user.deleteMany({ where: { email: { startsWith: stamp } } });
-    await prisma.$disconnect();
+    if (orgId) await getPrisma().organization.deleteMany({ where: { id: orgId } });
+    await getPrisma().user.deleteMany({ where: { email: { startsWith: stamp } } });
+    await getPrisma().$disconnect();
   }
 }
 

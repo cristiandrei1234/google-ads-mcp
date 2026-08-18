@@ -9,7 +9,7 @@
  * connection resolution (decrypt round-trip), audit append, user status read.
  * Cleans up everything it creates.
  */
-import prisma, {
+import { getPrisma,
   upsertConnection,
   addGrant,
   getConnectionForCustomer,
@@ -29,12 +29,12 @@ async function main() {
   let orgId = "";
 
   try {
-    const user = await prisma.user.create({
+    const user = await getPrisma().user.create({
       data: { email: `${stamp}@example.test`, name: "Smoke User" },
     });
-    const org = await prisma.organization.create({ data: { name: `Org ${stamp}` } });
+    const org = await getPrisma().organization.create({ data: { name: `Org ${stamp}` } });
     orgId = org.id;
-    const member = await prisma.member.create({
+    const member = await getPrisma().member.create({
       data: { organizationId: org.id, userId: user.id, role: "owner" },
     });
 
@@ -83,7 +83,7 @@ async function main() {
       outcome: "ok",
       argsSummary: { campaignId: "123", confirm: true },
     });
-    const auditCount = await prisma.auditLog.count({ where: { organizationId: org.id } });
+    const auditCount = await getPrisma().auditLog.count({ where: { organizationId: org.id } });
     assert(auditCount === 1, "audit row appended");
     console.log("✓ audit append OK");
 
@@ -97,10 +97,10 @@ async function main() {
   } finally {
     if (orgId) {
       // Cascades to members, connections, grants, audit logs.
-      await prisma.organization.deleteMany({ where: { id: orgId } });
+      await getPrisma().organization.deleteMany({ where: { id: orgId } });
     }
-    await prisma.user.deleteMany({ where: { email: { startsWith: stamp } } });
-    await prisma.$disconnect();
+    await getPrisma().user.deleteMany({ where: { email: { startsWith: stamp } } });
+    await getPrisma().$disconnect();
   }
 }
 

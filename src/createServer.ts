@@ -50,7 +50,7 @@ import {
     CONFIRM_FIELD,
 } from "./policies/destructive.js";
 import { getIdentity } from "./auth/identityContext.js";
-import { appendAuditLog, getGrantLevel } from "./services/db.js";
+import { hasDatabase } from "./config/env.js";
 import { toErrorMessage } from "./observability/errorMessage.js";
 import { asTool } from "./tools/_runtime.js";
 import logger from "./observability/logger.js";
@@ -81,15 +81,21 @@ function audit(
     if (!identity?.orgId) {
         return; // single-operator/stdio: nothing to attribute to an org.
     }
-    void appendAuditLog({
-        organizationId: identity.orgId,
-        memberId: identity.memberId,
-        userId: identity.userId,
-        tool: toolName,
-        customerId: customerId ?? null,
-        outcome,
-        errorKind: errorKind ?? null,
-    }).catch((err) => logger.warn({ err, tool: toolName }, "audit log write failed"));
+    const { orgId, memberId, userId } = identity;
+    // Imported past the guard above so a stdio process never loads Prisma.
+    void import("./services/db.js")
+        .then(({ appendAuditLog }) =>
+            appendAuditLog({
+                organizationId: orgId,
+                memberId,
+                userId,
+                tool: toolName,
+                customerId: customerId ?? null,
+                outcome,
+                errorKind: errorKind ?? null,
+            })
+        )
+        .catch((err) => logger.warn({ err, tool: toolName }, "audit log write failed"));
 }
 
 function withRbac(toolName: string, handler: RegisteredToolHandler): RegisteredToolHandler {
@@ -125,6 +131,8 @@ function withRbac(toolName: string, handler: RegisteredToolHandler): RegisteredT
         // Fine-grained: a write tool on a specific account requires a WRITE/ADMIN
         // grant, not merely a write-capable role.
         if (identity && customerId && isWriteTool(toolName)) {
+            // Only reachable with an authenticated identity, i.e. HTTP mode.
+            const { getGrantLevel } = await import("./services/db.js");
             const level = await getGrantLevel(identity.userId, customerId, identity.orgId);
             if (level !== "WRITE" && level !== "ADMIN") {
                 finish(customerId, "denied", "insufficient_grant");
@@ -270,6 +278,13 @@ const SIMPLE_TOOLS: readonly SimpleToolEntry[] = [
     ["generate_reach_forecast", "Generate a reach forecast.", GenerateReachForecastToolSchema, generateReachForecast],
 ];
 
+/**
+ * Tools backed by the multi-tenant database. Without DATABASE_URL they can only
+ * fail, and every advertised tool costs the model context, so they are left
+ * unregistered in single-operator mode.
+ */
+const DATABASE_BACKED_TOOLS: ReadonlySet<string> = new Set(["get_user_status"]);
+
 /** Register one {@link SimpleToolEntry}; `asTool` supplies the uniform wrapper. */
 function registerSimpleTool(server: McpServer, [name, description, schema, handler]: SimpleToolEntry): void {
     server.registerTool(name, { description, inputSchema: schema.shape }, (args: unknown) =>
@@ -329,6 +344,9 @@ export function createMcpServer(): McpServer {
 // toErrorMessage) supply all the cross-cutting behavior, so there is no
 // per-tool boilerplate here.
 for (const entry of SIMPLE_TOOLS) {
+    if (DATABASE_BACKED_TOOLS.has(entry[0]) && !hasDatabase()) {
+        continue;
+    }
     registerSimpleTool(server, entry);
 }
 // Register advanced coverage tools

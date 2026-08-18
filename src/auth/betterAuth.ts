@@ -2,7 +2,7 @@ import { betterAuth } from "better-auth";
 import { prismaAdapter } from "better-auth/adapters/prisma";
 import { organization, admin, bearer, mcp } from "better-auth/plugins";
 import { sso } from "@better-auth/sso";
-import prisma from "../services/db.js";
+import { getPrisma } from "../services/db.js";
 import config from "../config/env.js";
 import logger from "../observability/logger.js";
 import { sendActionEmail, isEmailConfigured } from "../services/email.js";
@@ -41,7 +41,7 @@ const trustedOrigins = Array.from(
 export const auth = betterAuth({
   baseURL,
   secret: config.BETTER_AUTH_SECRET,
-  database: prismaAdapter(prisma, { provider: "postgresql" }),
+  database: prismaAdapter(getPrisma(), { provider: "postgresql" }),
   trustedOrigins,
 
   emailAndPassword: {
