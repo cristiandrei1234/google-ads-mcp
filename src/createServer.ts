@@ -1,3 +1,4 @@
+import { createRequire } from "node:module";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { listAccounts, ListAccountsSchema } from "./tools/listAccounts.js";
 import { runQuery, RunQuerySchema } from "./tools/runQuery.js";
@@ -288,6 +289,17 @@ function returnsBulkRows(toolName: string): boolean {
     return /^(list|get|run|search|generate)_/.test(toolName);
 }
 
+/**
+ * The published package version, so the version a client reports cannot drift
+ * from the one on npm. `../package.json` resolves to the package root from both
+ * `src/` and `dist/`, and `files` ships it.
+ */
+function packageVersion(): string {
+    const require = createRequire(import.meta.url);
+    const { version } = require("../package.json") as { version: string };
+    return version;
+}
+
 /** Prose the client shows the model before any tool is listed. */
 function serverInstructions(enabled: ReadonlySet<Toolset>): string {
     return [
@@ -356,7 +368,7 @@ export function createMcpServer(): McpServer {
     const server = new McpServer(
         {
             name: "google-ads-mcp",
-            version: "1.0.0",
+            version: packageVersion(),
         },
         // Tells the model when to come looking for these tools at all. This
         // matters more, not less, once a client defers tool definitions behind a

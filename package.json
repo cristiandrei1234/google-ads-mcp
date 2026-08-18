@@ -1,8 +1,49 @@
 {
-  "name": "google-ads-mcp",
-  "version": "1.0.0",
-  "description": "",
+  "name": "@automwise/google-ads-mcp",
+  "version": "2.0.0",
+  "description": "MCP server for the Google Ads API: read and manage campaigns, keywords, budgets, conversions, audiences, assets and Shopping from an AI assistant.",
+  "keywords": [
+    "mcp",
+    "model-context-protocol",
+    "google-ads",
+    "google-ads-api",
+    "gaql",
+    "ppc",
+    "sem",
+    "adwords",
+    "merchant-center",
+    "performance-max",
+    "claude",
+    "ai-agent"
+  ],
+  "homepage": "https://github.com/cristiandrei1234/google-ads-mcp#readme",
+  "bugs": {
+    "url": "https://github.com/cristiandrei1234/google-ads-mcp/issues"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/cristiandrei1234/google-ads-mcp.git"
+  },
+  "author": "Cristian Mihaila <cristian@automwise.com>",
+  "license": "SEE LICENSE IN LICENSE",
+  "type": "module",
   "main": "dist/index.js",
+  "bin": {
+    "google-ads-mcp": "dist/index.js"
+  },
+  "files": [
+    "dist",
+    "prisma"
+  ],
+  "engines": {
+    "node": ">=20"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "workspaces": [
+    "packages/*"
+  ],
   "scripts": {
     "build": "tsc",
     "start": "node dist/index.js",
@@ -15,40 +56,89 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "test:watch": "vitest",
-    "coverage": "vitest run --coverage"
+    "coverage": "vitest run --coverage",
+    "prepublishOnly": "npm run build"
   },
-  "keywords": [],
-  "author": "",
-  "license": "SEE LICENSE IN LICENSE",
-  "type": "module",
   "dependencies": {
-    "@better-auth/sso": "~1.6.30",
     "@modelcontextprotocol/sdk": "^1.30.0",
     "@opentelemetry/api": "^1.9.1",
+    "axios": "^1.19.0",
+    "dotenv": "^17.4.2",
+    "google-ads-api": "^24.1.0",
+    "google-auth-library": "^11.0.2",
+    "googleapis": "^176.0.0",
+    "pino": "^10.3.1",
+    "pino-pretty": "^13.1.3",
+    "prom-client": "^15.1.3",
+    "zod": "^4.4.3"
+  },
+  "peerDependencies": {
+    "@better-auth/sso": "~1.6.30",
     "@prisma/adapter-pg": "^7.9.1",
     "@prisma/client": "^7.9.1",
     "@react-email/components": "^1.0.12",
     "@react-email/render": "^2.1.0",
-    "axios": "^1.19.0",
     "better-auth": "~1.6.30",
     "cookie-parser": "^1.4.7",
     "cors": "^2.8.6",
-    "dotenv": "^17.4.2",
     "express": "^5.2.1",
     "express-rate-limit": "^8.6.2",
     "express-session": "^1.19.0",
-    "google-ads-api": "^24.1.0",
-    "google-auth-library": "^11.0.2",
-    "googleapis": "^176.0.0",
     "helmet": "^8.3.0",
-    "pino": "^10.3.1",
-    "pino-pretty": "^13.1.3",
     "prisma": "^7.9.1",
-    "prom-client": "^15.1.3",
     "react": "^19.2.8",
     "react-dom": "^19.2.8",
-    "resend": "^6.20.0",
-    "zod": "^4.4.3"
+    "resend": "^6.20.0"
+  },
+  "peerDependenciesMeta": {
+    "@better-auth/sso": {
+      "optional": true
+    },
+    "@prisma/adapter-pg": {
+      "optional": true
+    },
+    "@prisma/client": {
+      "optional": true
+    },
+    "@react-email/components": {
+      "optional": true
+    },
+    "@react-email/render": {
+      "optional": true
+    },
+    "better-auth": {
+      "optional": true
+    },
+    "cookie-parser": {
+      "optional": true
+    },
+    "cors": {
+      "optional": true
+    },
+    "express": {
+      "optional": true
+    },
+    "express-rate-limit": {
+      "optional": true
+    },
+    "express-session": {
+      "optional": true
+    },
+    "helmet": {
+      "optional": true
+    },
+    "prisma": {
+      "optional": true
+    },
+    "react": {
+      "optional": true
+    },
+    "react-dom": {
+      "optional": true
+    },
+    "resend": {
+      "optional": true
+    }
   },
   "devDependencies": {
     "@types/cookie-parser": "^1.4.10",

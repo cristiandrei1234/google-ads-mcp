@@ -9,6 +9,9 @@ FROM base AS deps
 WORKDIR /app
 
 COPY package.json package-lock.json ./
+# The multi-tenant dependencies live in the server workspace; npm ci needs its
+# manifest to reproduce the lockfile.
+COPY packages/server/package.json ./packages/server/
 COPY prisma ./prisma
 COPY prisma.config.ts ./
 
@@ -29,6 +32,7 @@ WORKDIR /app
 ENV NODE_ENV=production
 
 COPY package.json package-lock.json ./
+COPY packages/server/package.json ./packages/server/
 COPY prisma ./prisma
 COPY prisma.config.ts ./
 

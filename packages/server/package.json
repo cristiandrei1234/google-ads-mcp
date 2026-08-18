@@ -1,0 +1,57 @@
+{
+  "name": "@automwise/google-ads-mcp-server",
+  "version": "2.0.0",
+  "private": true,
+  "_comment": "Private until @automwise/google-ads-mcp is on npm: npm cannot resolve an unpublished root package as a workspace sibling. To publish: publish the core first, then set private:false and add \"@automwise/google-ads-mcp\": \"^2.0.0\" to dependencies.",
+  "description": "Multi-tenant HTTP transport for @automwise/google-ads-mcp: Better Auth sessions, per-account grants, encrypted refresh tokens, audit trail and Prometheus metrics.",
+  "keywords": [
+    "mcp",
+    "google-ads",
+    "multi-tenant",
+    "http",
+    "better-auth",
+    "agency"
+  ],
+  "homepage": "https://github.com/cristiandrei1234/google-ads-mcp#readme",
+  "bugs": {
+    "url": "https://github.com/cristiandrei1234/google-ads-mcp/issues"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/cristiandrei1234/google-ads-mcp.git",
+    "directory": "packages/server"
+  },
+  "author": "Cristian Mihaila <cristian@automwise.com>",
+  "license": "SEE LICENSE IN LICENSE",
+  "type": "module",
+  "bin": {
+    "google-ads-mcp-server": "bin/google-ads-mcp-server.mjs"
+  },
+  "files": [
+    "bin"
+  ],
+  "engines": {
+    "node": ">=20"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "dependencies": {
+    "@better-auth/sso": "~1.6.30",
+    "@prisma/adapter-pg": "^7.9.1",
+    "@prisma/client": "^7.9.1",
+    "@react-email/components": "^1.0.12",
+    "@react-email/render": "^2.1.0",
+    "better-auth": "~1.6.30",
+    "cookie-parser": "^1.4.7",
+    "cors": "^2.8.6",
+    "express": "^5.2.1",
+    "express-rate-limit": "^8.6.2",
+    "express-session": "^1.19.0",
+    "helmet": "^8.3.0",
+    "prisma": "^7.9.1",
+    "react": "^19.2.8",
+    "react-dom": "^19.2.8",
+    "resend": "^6.20.0"
+  }
+}
