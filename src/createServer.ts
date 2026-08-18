@@ -1,5 +1,5 @@
 import { createRequire } from "node:module";
-import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+import { McpServer, type RegisteredTool } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { listAccounts, ListAccountsSchema } from "./tools/listAccounts.js";
 import { runQuery, RunQuerySchema } from "./tools/runQuery.js";
 import { pauseCampaign, PauseCampaignSchema, enableCampaign, EnableCampaignSchema, removeCampaign, RemoveCampaignSchema } from "./tools/campaigns.js";
@@ -53,6 +53,12 @@ import {
 import { getIdentity } from "./auth/identityContext.js";
 import config, { hasDatabase } from "./config/env.js";
 import { resolveToolsets, TOOLSETS, type Toolset } from "./policies/toolsets.js";
+import {
+    EnableToolsetSchema,
+    enableToolsetDescription,
+    enableToolsets,
+    type ToolsetMember,
+} from "./tools/toolsetControl.js";
 import { toErrorMessage } from "./observability/errorMessage.js";
 import { asTool, maxResultChars } from "./tools/_runtime.js";
 import logger from "./observability/logger.js";
@@ -360,11 +366,23 @@ function registerSimpleTool(server: McpServer, [, name, description, schema, han
     );
 }
 
+/**
+ * Every registered tool with the group that owns it, so a group can be switched
+ * on later. Only populated in dynamic mode.
+ */
+type ToolRegistry = Map<string, ToolsetMember & { disable(): void }>;
+
 // Build and fully configure the MCP server (all tools + RBAC + destructive
 // guardrails). No transport is connected here, so this builder is reused by
 // both the stdio entry (src/index.ts) and the HTTP transport (src/server/http.ts).
 export function createMcpServer(): McpServer {
     const enabledToolsets = resolveToolsets(config.GOOGLE_ADS_TOOLSETS);
+    const dynamicToolsets = config.GOOGLE_ADS_DYNAMIC_TOOLSETS;
+    const registry: ToolRegistry = new Map();
+    // Registration is synchronous, so the group being registered can simply be
+    // tracked alongside it; the interceptor below has no other way to know which
+    // module a bespoke registrar is currently registering from.
+    let registeringToolset: Toolset = "core";
     const server = new McpServer(
         {
             name: "google-ads-mcp",
@@ -407,7 +425,18 @@ export function createMcpServer(): McpServer {
         if (returnsBulkRows(name)) {
             config._meta = { ...config._meta, "anthropic/maxResultSizeChars": maxResultChars() };
         }
-        return (originalRegisterTool as any)(name, config, withRbac(name, handler));
+        const registered = (originalRegisterTool as any)(name, config, withRbac(name, handler)) as RegisteredTool;
+        if (dynamicToolsets) {
+            registry.set(name, {
+                toolset: registeringToolset,
+                get enabled() {
+                    return registered.enabled;
+                },
+                enable: () => registered.enable(),
+                disable: () => registered.disable(),
+            });
+        }
+        return registered;
     }
     throw new Error(`registerTool must use modern signature: registerTool(name, config, handler). Invalid call for ${name}.`);
 };
@@ -417,21 +446,53 @@ export function createMcpServer(): McpServer {
 // per-tool boilerplate here.
 for (const entry of SIMPLE_TOOLS) {
     const [toolset, name] = entry;
-    if (!enabledToolsets.has(toolset)) {
+    if (!dynamicToolsets && !enabledToolsets.has(toolset)) {
         continue;
     }
     if (DATABASE_BACKED_TOOLS.has(name) && !hasDatabase()) {
         continue;
     }
+    registeringToolset = toolset;
     registerSimpleTool(server, entry);
 }
-// Tools with bespoke registration logic, each owned by one toolset. Skipping a
-// disabled group here (rather than registering and filtering afterwards) is
-// what keeps the disabled tools out of tools/list entirely.
+// Tools with bespoke registration logic, each owned by one toolset. Outside
+// dynamic mode a disabled group is skipped rather than registered and filtered,
+// which is what keeps its tools out of tools/list entirely.
 for (const [toolset, register] of MODULE_REGISTRARS) {
-    if (enabledToolsets.has(toolset)) {
-        register(server);
+    if (!dynamicToolsets && !enabledToolsets.has(toolset)) {
+        continue;
     }
+    registeringToolset = toolset;
+    register(server);
 }
+
+    if (dynamicToolsets) {
+        for (const member of registry.values()) {
+            if (!enabledToolsets.has(member.toolset)) {
+                member.disable();
+            }
+        }
+        registerEnableToolsetTool(server, registry);
+    }
     return server;
+}
+
+/**
+ * The switch the model reaches for when the tool it needs is not loaded.
+ *
+ * Registered last and never disabled, so it survives every toggle. Enabling a
+ * tool makes the SDK emit tools/list_changed on its own; clients that ignore
+ * that notification need GOOGLE_ADS_TOOLSETS instead.
+ */
+function registerEnableToolsetTool(server: McpServer, registry: ToolRegistry): void {
+    server.registerTool(
+        "enable_toolset",
+        { description: enableToolsetDescription(), inputSchema: EnableToolsetSchema.shape },
+        (args: unknown) =>
+            asTool(
+                async (input: z.infer<typeof EnableToolsetSchema>) =>
+                    enableToolsets(registry, input.toolsets),
+                args as z.infer<typeof EnableToolsetSchema>
+            )
+    );
 }

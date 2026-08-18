@@ -26,6 +26,8 @@ const READ_ONLY_EXTRA: ReadonlySet<string> = new Set([
   "run_gaql_query",
   "generate_keyword_ideas",
   "generate_reach_forecast",
+  // Changes what this session advertises, never an advertiser's account.
+  "enable_toolset",
 ]);
 
 export function isReadOnlyTool(toolName: string): boolean {

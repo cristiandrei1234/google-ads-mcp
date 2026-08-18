@@ -78,6 +78,23 @@ The default (`core,reporting`) advertises 46 tools — about 7k tokens of
 An unknown group name refuses to start and prints the valid ones, rather than
 silently registering the wrong set.
 
+### Dynamic toolsets (beta)
+
+```bash
+GOOGLE_ADS_DYNAMIC_TOOLSETS=1
+```
+
+Registers every group but leaves the inactive ones disabled, and adds one
+always-available `enable_toolset` tool. When the model needs something that is
+not loaded it switches the group on mid-session and the tools appear
+immediately; the tool's own description lists every group and what is in it, so
+the model knows what to ask for.
+
+It is beta because it depends on the client acting on the `tools/list_changed`
+notification the server emits, and support varies. `GOOGLE_ADS_TOOLSETS` remains
+the escape hatch for clients that ignore it: set the groups you need up front and
+leave this flag off (the default).
+
 ---
 
 ## Client configuration
@@ -373,6 +390,7 @@ CORS allows credentialed requests.
 | `DATABASE_URL` | HTTP | PostgreSQL connection string. Not needed for stdio |
 | `GOOGLE_ADS_MCP_ENV` | optional | Path to the `.env` to load, ahead of `~/.config/google-ads-mcp/.env` |
 | `GOOGLE_ADS_TOOLSETS` | optional | Comma-separated tool groups, or `all` (default `core,reporting`) |
+| `GOOGLE_ADS_DYNAMIC_TOOLSETS` | optional | Beta: register all groups disabled and expose `enable_toolset` (off by default) |
 | `GOOGLE_ADS_MAX_RESULT_CHARS` | optional | Ceiling on a single tool result (default 100000) |
 | `TOKEN_ENCRYPTION_KEY` | yes (HTTP) | base64 that decodes to exactly 32 bytes — `openssl rand -base64 32` |
 | `TOKEN_ENCRYPTION_KEY_PREVIOUS` | optional | comma-separated old keys, decrypt-only (key rotation) |

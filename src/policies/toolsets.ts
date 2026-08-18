@@ -30,6 +30,30 @@ export const TOOLSETS = [
 
 export type Toolset = (typeof TOOLSETS)[number];
 
+/**
+ * What each group contains, in the words a Google Ads practitioner would use.
+ *
+ * This is not decoration: with dynamic toolsets the model can only ask for a
+ * group it can see described, so an unlisted or vague group is a group nobody
+ * ever enables.
+ */
+export const TOOLSET_DESCRIPTIONS: Readonly<Record<Toolset, string>> = {
+  core: "account discovery, GAQL queries, campaigns (create, update, targeting, budgets, cloning), ad groups, ads, keyword lifecycle",
+  reporting: "search terms report, change history, policy findings and disapprovals, Google's recommendations, Local Services leads",
+  keywords: "bulk keyword add/update/remove and keyword-level edits",
+  negatives: "negative keywords, shared negative keyword lists, account-level negatives",
+  audiences: "user lists, custom and combined audiences, Customer Match uploads",
+  conversions: "conversion actions, conversion goals, offline conversion uploads and adjustments",
+  assets: "assets, asset groups, asset sets, Performance Max asset group signals",
+  shopping: "Merchant Center products and links, Shopping performance, listing groups, hotel/travel verticals",
+  planning: "Keyword Planner ideas and forecasts, keyword plans, reach planning",
+  experiments: "campaign experiments and campaign drafts",
+  bidding: "portfolio bidding strategies, seasonality adjustments, data exclusions",
+  billing: "invoices, account budgets, billing setups, advertiser identity verification",
+  admin: "multi-tenant user status (only available when a database is configured)",
+  resources: "generated raw list/get/create/update/remove tools over ~90 Google Ads resources, plus batch jobs",
+};
+
 /** Registered when GOOGLE_ADS_TOOLSETS is unset: day-to-day management + reads. */
 export const DEFAULT_TOOLSETS: readonly Toolset[] = ["core", "reporting"];
 

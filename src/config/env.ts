@@ -62,6 +62,12 @@ const envSchema = z.object({
   // Comma-separated tool groups to register (see policies/toolsets.ts), or
   // 'all'. Unset registers the default groups.
   GOOGLE_ADS_TOOLSETS: z.string().optional().transform(s => s?.trim()),
+  // Beta: register every toolset but leave the inactive ones disabled, and add
+  // an enable_toolset tool the model can call mid-session. Accepts 1/true/yes.
+  GOOGLE_ADS_DYNAMIC_TOOLSETS: z
+    .string()
+    .optional()
+    .transform(s => ['1', 'true', 'yes'].includes((s ?? '').trim().toLowerCase())),
   // Ceiling on the characters a single tool result may put into the model's
   // context. Oversized results are truncated with a message telling the caller
   // how to narrow the query. Default: 100_000.
