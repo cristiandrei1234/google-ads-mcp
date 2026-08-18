@@ -5,12 +5,11 @@ import logger from "../observability/logger.js";
 const LinkMerchantCenterSchema = z.object({
   customerId: z.string().describe("The Google Ads Customer ID"),
   merchantCenterId: z.string().describe("The Merchant Center Account ID to link"),
-  userId: z.string().optional().describe("SaaS User ID"),
 });
 
 export const LinkMerchantCenterToolSchema = LinkMerchantCenterSchema;
 export async function linkMerchantCenter(args: z.infer<typeof LinkMerchantCenterSchema>) {
-  const customer = await getCustomer(args.customerId, args.userId);
+  const customer = await getCustomer(args.customerId);
   const merchantCenterId = args.merchantCenterId.replace(/-/g, "").trim();
   if (!/^\d+$/.test(merchantCenterId)) {
     throw new Error(`Invalid merchantCenterId '${args.merchantCenterId}'. Expected numeric ID.`);
@@ -34,12 +33,11 @@ export async function linkMerchantCenter(args: z.infer<typeof LinkMerchantCenter
 
 const ListMerchantCenterLinksSchema = z.object({
   customerId: z.string().describe("The Google Ads Customer ID"),
-  userId: z.string().optional().describe("SaaS User ID"),
 });
 
 export const ListMerchantCenterLinksToolSchema = ListMerchantCenterLinksSchema;
 export async function listMerchantCenterLinks(args: z.infer<typeof ListMerchantCenterLinksSchema>) {
-  const customer = await getCustomer(args.customerId, args.userId);
+  const customer = await getCustomer(args.customerId);
   const query = `
     SELECT 
       product_link.resource_name,
@@ -58,7 +56,7 @@ const UnlinkMerchantCenterSchema = LinkMerchantCenterSchema;
 
 export const UnlinkMerchantCenterToolSchema = UnlinkMerchantCenterSchema;
 export async function unlinkMerchantCenter(args: z.infer<typeof UnlinkMerchantCenterSchema>) {
-  const customer = await getCustomer(args.customerId, args.userId);
+  const customer = await getCustomer(args.customerId);
   const merchantCenterId = args.merchantCenterId.replace(/-/g, "").trim();
   if (!/^\d+$/.test(merchantCenterId)) {
     throw new Error(`Invalid merchantCenterId '${args.merchantCenterId}'. Expected numeric ID.`);

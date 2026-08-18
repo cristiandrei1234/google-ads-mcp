@@ -7,12 +7,11 @@ import { toErrorMessage } from "../observability/errorMessage.js";
 const ListRecommendationsSchema = z.object({
   customerId: z.string().describe("The Google Ads Customer ID"),
   limit: z.number().optional().default(50).describe("Max number of recommendations to retrieve"),
-  userId: z.string().optional().describe("SaaS User ID"),
 });
 
 export const ListRecommendationsToolSchema = ListRecommendationsSchema;
 export async function listRecommendations(args: z.infer<typeof ListRecommendationsSchema>) {
-  const customer = await getCustomer(args.customerId, args.userId);
+  const customer = await getCustomer(args.customerId);
   const query = `
     SELECT 
       recommendation.resource_name,
@@ -31,12 +30,11 @@ export async function listRecommendations(args: z.infer<typeof ListRecommendatio
 const ApplyRecommendationSchema = z.object({
   customerId: z.string().describe("The Google Ads Customer ID"),
   recommendationResourceName: z.string().describe("The resource name of the recommendation to apply"),
-  userId: z.string().optional().describe("SaaS User ID"),
 });
 
 export const ApplyRecommendationToolSchema = ApplyRecommendationSchema;
 export async function applyRecommendation(args: z.infer<typeof ApplyRecommendationSchema>) {
-  const customer = await getCustomer(args.customerId, args.userId);
+  const customer = await getCustomer(args.customerId);
   
   // recommendation_service.apply_recommendation
   
@@ -61,12 +59,11 @@ export async function applyRecommendation(args: z.infer<typeof ApplyRecommendati
 const DismissRecommendationSchema = z.object({
   customerId: z.string().describe("The Google Ads Customer ID"),
   recommendationResourceName: z.string().describe("The resource name of the recommendation to dismiss"),
-  userId: z.string().optional().describe("SaaS User ID"),
 });
 
 export const DismissRecommendationToolSchema = DismissRecommendationSchema;
 export async function dismissRecommendation(args: z.infer<typeof DismissRecommendationSchema>) {
-  const customer = await getCustomer(args.customerId, args.userId);
+  const customer = await getCustomer(args.customerId);
   
   const operation = {
     resource_name: args.recommendationResourceName,

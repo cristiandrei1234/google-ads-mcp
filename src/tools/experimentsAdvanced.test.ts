@@ -237,10 +237,10 @@ describe("list_experiment_arms", () => {
     expect(arg.query).toContain("LIMIT 25");
   });
 
-  it("forwards userId in the runQuery call", async () => {
-    await call("list_experiment_arms", { customerId: "1", experimentId: "5", limit: 100, userId: "u" });
+  it("honors an explicit limit in the runQuery call", async () => {
+    await call("list_experiment_arms", { customerId: "1", experimentId: "5", limit: 100 });
     const arg = (runQuery as any).mock.calls[0][0];
-    expect(arg.userId).toBe("u");
+    expect(arg.customerId).toBe("1");
     expect(arg.query).toContain("LIMIT 100");
   });
 });

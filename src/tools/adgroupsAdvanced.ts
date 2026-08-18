@@ -20,7 +20,7 @@ const CreateAdGroupSchema = BaseSchema.extend({
     cpcBidMicros: z.number().int().positive().optional(),
 });
 async function createAdGroup(args: z.infer<typeof CreateAdGroupSchema>) {
-    const customer = await getCustomer(args.customerId, args.userId);
+    const customer = await getCustomer(args.customerId);
     const create: any = {
         campaign: `customers/${args.customerId}/campaigns/${args.campaignId}`,
         name: args.name,
@@ -39,7 +39,7 @@ const UpdateAdGroupSchema = BaseSchema.extend({
     cpcBidMicros: z.number().int().positive().optional(),
 });
 async function updateAdGroup(args: z.infer<typeof UpdateAdGroupSchema>) {
-    const customer = await getCustomer(args.customerId, args.userId);
+    const customer = await getCustomer(args.customerId);
     const update: any = {
         resource_name: `customers/${args.customerId}/adGroups/${args.adGroupId}`,
     };
@@ -76,7 +76,6 @@ async function listAdGroups(args: z.infer<typeof ListAdGroupsSchema>) {
     const where = args.campaignId ? `WHERE campaign.id = ${args.campaignId}` : "";
     return runQuery({
         customerId: args.customerId,
-        userId: args.userId,
         query: `SELECT
       ad_group.id,
       ad_group.name,
@@ -97,10 +96,9 @@ const CloneAdGroupSchema = BaseSchema.extend({
     status: z.enum(["ENABLED", "PAUSED"]).default("PAUSED"),
 });
 async function cloneAdGroup(args: z.infer<typeof CloneAdGroupSchema>) {
-    const customer = await getCustomer(args.customerId, args.userId);
+    const customer = await getCustomer(args.customerId);
     const sourceRows: any[] = await runQuery({
         customerId: args.customerId,
-        userId: args.userId,
         query: `SELECT ad_group.id, ad_group.name, ad_group.status, ad_group.type, ad_group.cpc_bid_micros, campaign.id
             FROM ad_group
             WHERE ad_group.id = ${args.sourceAdGroupId}
@@ -132,7 +130,6 @@ async function cloneAdGroup(args: z.infer<typeof CloneAdGroupSchema>) {
     }
     const keywordRows: any[] = await runQuery({
         customerId: args.customerId,
-        userId: args.userId,
         query: `SELECT ad_group_criterion.keyword.text, ad_group_criterion.keyword.match_type, ad_group_criterion.status
             FROM keyword_view
             WHERE ad_group.id = ${args.sourceAdGroupId}

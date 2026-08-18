@@ -10,12 +10,11 @@ const GenerateKeywordIdeasSchema = z.object({
   languageId: z.string().default("1000").describe("Language constant ID (default 1000 for English)"),
   geoTargetConstants: z.array(z.string()).optional().describe("Resource names of geo targets (e.g. 'geoTargetConstants/2840' for US)"),
   includeAdultKeywords: z.boolean().default(false).describe("Include adult keywords"),
-  userId: z.string().optional().describe("SaaS User ID"),
 });
 
 export const GenerateKeywordIdeasToolSchema = GenerateKeywordIdeasSchema;
 export async function generateKeywordIdeas(args: z.infer<typeof GenerateKeywordIdeasSchema>) {
-  const customer = await getCustomer(args.customerId, args.userId);
+  const customer = await getCustomer(args.customerId);
   
   const request: any = {
     customer_id: args.customerId,

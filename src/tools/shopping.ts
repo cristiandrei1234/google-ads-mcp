@@ -8,12 +8,11 @@ const ListShoppingPerformanceSchema = z.object({
   customerId: z.string().describe("The Google Ads Customer ID"),
   dateRange: z.enum(["TODAY", "YESTERDAY", "LAST_7_DAYS", "LAST_30_DAYS", "THIS_MONTH", "LAST_MONTH"]).default("LAST_30_DAYS"),
   limit: z.number().default(50),
-  userId: z.string().optional().describe("SaaS User ID"),
 });
 
 export const ListShoppingPerformanceToolSchema = ListShoppingPerformanceSchema;
 export async function listShoppingPerformance(args: z.infer<typeof ListShoppingPerformanceSchema>) {
-  const customer = await getCustomer(args.customerId, args.userId);
+  const customer = await getCustomer(args.customerId);
   
   const queryWithMetrics = `
     SELECT
@@ -61,12 +60,11 @@ export async function listShoppingPerformance(args: z.infer<typeof ListShoppingP
 const ListListingGroupsSchema = z.object({
   customerId: z.string().describe("The Google Ads Customer ID"),
   adGroupId: z.string().regex(/^\d+$/, "adGroupId must be numeric").optional().describe("Filter by Ad Group ID"),
-  userId: z.string().optional().describe("SaaS User ID"),
 });
 
 export const ListListingGroupsToolSchema = ListListingGroupsSchema;
 export async function listListingGroups(args: z.infer<typeof ListListingGroupsSchema>) {
-  const customer = await getCustomer(args.customerId, args.userId);
+  const customer = await getCustomer(args.customerId);
   
   let query = `
     SELECT
@@ -95,12 +93,11 @@ export async function listListingGroups(args: z.infer<typeof ListListingGroupsSc
 const ListAssetGroupListingGroupsSchema = z.object({
   customerId: z.string().describe("The Google Ads Customer ID"),
   assetGroupId: z.string().regex(/^\d+$/, "assetGroupId must be numeric").optional().describe("Filter by Asset Group ID"),
-  userId: z.string().optional().describe("SaaS User ID"),
 });
 
 export const ListAssetGroupListingGroupsToolSchema = ListAssetGroupListingGroupsSchema;
 export async function listAssetGroupListingGroups(args: z.infer<typeof ListAssetGroupListingGroupsSchema>) {
-  const customer = await getCustomer(args.customerId, args.userId);
+  const customer = await getCustomer(args.customerId);
   
   let query = `
     SELECT

@@ -5,26 +5,37 @@ vi.mock("../services/google-ads/client.js", () => ({ getCustomer: vi.fn() }));
 import { runQuery } from "./runQuery.js";
 import { getCustomer } from "../services/google-ads/client.js";
 import { fakeCustomer } from "../test/harness.js";
+import { DEFAULT_QUERY_LIMIT } from "../policies/gaql.js";
 
 beforeEach(() => {
   vi.clearAllMocks();
 });
 
 describe("runQuery", () => {
-  it("queries the customer and returns rows (no userId)", async () => {
+  it("queries the customer and returns rows", async () => {
     const customer = fakeCustomer([{ a: 1 }]);
     (getCustomer as any).mockResolvedValue(customer);
-    const res = await runQuery({ customerId: "123", query: "SELECT x" });
-    expect(getCustomer).toHaveBeenCalledWith("123", undefined);
-    expect(customer.query).toHaveBeenCalledWith("SELECT x");
+    const res = await runQuery({ customerId: "123", query: "SELECT x LIMIT 3" });
+    expect(getCustomer).toHaveBeenCalledWith("123");
+    expect(customer.query).toHaveBeenCalledWith("SELECT x LIMIT 3");
     expect(res).toEqual([{ a: 1 }]);
   });
 
-  it("passes userId through to getCustomer (multi-tenant branch)", async () => {
+  it("adds a default LIMIT to a statement that has none", async () => {
     const customer = fakeCustomer([]);
     (getCustomer as any).mockResolvedValue(customer);
-    await runQuery({ customerId: "123", query: "SELECT y", userId: "u-1" });
-    expect(getCustomer).toHaveBeenCalledWith("123", "u-1");
+    await runQuery({ customerId: "123", query: "SELECT y FROM campaign" });
+    expect(customer.query).toHaveBeenCalledWith(`SELECT y FROM campaign LIMIT ${DEFAULT_QUERY_LIMIT}`);
+  });
+
+  it("rejects a statement that smuggles a second statement or a comment", async () => {
+    await expect(
+      runQuery({ customerId: "1", query: "SELECT a FROM campaign; DROP TABLE x" })
+    ).rejects.toThrow(/Invalid GAQL query/);
+    await expect(
+      runQuery({ customerId: "1", query: "SELECT a FROM campaign -- comment" })
+    ).rejects.toThrow(/Invalid GAQL query/);
+    expect(getCustomer).not.toHaveBeenCalled();
   });
 
   it("rethrows when getCustomer rejects", async () => {

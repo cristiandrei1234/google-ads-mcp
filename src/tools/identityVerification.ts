@@ -5,12 +5,11 @@ import { toErrorMessage } from "../observability/errorMessage.js";
 
 const IdentityVerificationSchema = z.object({
   customerId: z.string().describe("The Google Ads Customer ID"),
-  userId: z.string().optional().describe("SaaS User ID"),
 });
 
 export const StartIdentityVerificationToolSchema = IdentityVerificationSchema;
 export async function startIdentityVerification(args: z.infer<typeof IdentityVerificationSchema>) {
-  const customer = await getCustomer(args.customerId, args.userId);
+  const customer = await getCustomer(args.customerId);
   
   try {
     const result = await customer.identityVerifications.startIdentityVerification({
@@ -26,7 +25,7 @@ export async function startIdentityVerification(args: z.infer<typeof IdentityVer
 
 export const GetIdentityVerificationToolSchema = IdentityVerificationSchema;
 export async function getIdentityVerification(args: z.infer<typeof IdentityVerificationSchema>) {
-  const customer = await getCustomer(args.customerId, args.userId);
+  const customer = await getCustomer(args.customerId);
   
   try {
     const result = await customer.identityVerifications.getIdentityVerification({

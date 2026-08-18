@@ -13,7 +13,7 @@ const SetCampaignGeoTargetingSchema = BaseSchema.extend({
     negative: z.boolean().default(false),
 });
 async function setCampaignGeoTargeting(args: z.infer<typeof SetCampaignGeoTargetingSchema>) {
-    const customer = await getCustomer(args.customerId, args.userId);
+    const customer = await getCustomer(args.customerId);
     const operations: any[] = [];
     for (const geoId of args.addGeoTargetConstantIds) {
         operations.push({
@@ -51,7 +51,7 @@ const SetCampaignLanguageTargetingSchema = BaseSchema.extend({
     negative: z.boolean().default(false),
 });
 async function setCampaignLanguageTargeting(args: z.infer<typeof SetCampaignLanguageTargetingSchema>) {
-    const customer = await getCustomer(args.customerId, args.userId);
+    const customer = await getCustomer(args.customerId);
     const operations: any[] = [];
     for (const languageId of args.addLanguageConstantIds) {
         operations.push({
@@ -95,10 +95,9 @@ const SetCampaignDeviceModifiersSchema = BaseSchema.extend({
     })),
 });
 async function setCampaignDeviceModifiers(args: z.infer<typeof SetCampaignDeviceModifiersSchema>) {
-    const customer = await getCustomer(args.customerId, args.userId);
+    const customer = await getCustomer(args.customerId);
     const rows: any[] = await runQuery({
         customerId: args.customerId,
-        userId: args.userId,
         query: `SELECT campaign_criterion.resource_name, campaign_criterion.device.type
             FROM campaign_criterion
             WHERE campaign.id = ${args.campaignId}
@@ -144,7 +143,7 @@ const SetCampaignAdScheduleSchema = BaseSchema.extend({
     removeCriterionIds: z.array(z.string()).default([]),
 });
 async function setCampaignAdSchedule(args: z.infer<typeof SetCampaignAdScheduleSchema>) {
-    const customer = await getCustomer(args.customerId, args.userId);
+    const customer = await getCustomer(args.customerId);
     const operations: any[] = [];
     for (const schedule of args.addSchedules) {
         const create: any = {
@@ -187,7 +186,7 @@ const SetCampaignContentExclusionsSchema = BaseSchema.extend({
     removeCriterionIds: z.array(z.string()).default([]),
 });
 async function setCampaignContentExclusions(args: z.infer<typeof SetCampaignContentExclusionsSchema>) {
-    const customer = await getCustomer(args.customerId, args.userId);
+    const customer = await getCustomer(args.customerId);
     const operations: any[] = [];
     for (const url of args.excludedPlacementUrls) {
         operations.push({
@@ -234,7 +233,7 @@ const SetCampaignBiddingStrategySchema = BaseSchema.extend({
     targetRoas: z.number().positive().optional(),
 });
 async function setCampaignBiddingStrategy(args: z.infer<typeof SetCampaignBiddingStrategySchema>) {
-    const customer = await getCustomer(args.customerId, args.userId);
+    const customer = await getCustomer(args.customerId);
     const update: any = {
         resource_name: `customers/${args.customerId}/campaigns/${args.campaignId}`,
     };
@@ -282,10 +281,10 @@ const SetCampaignLabelsSchema = BaseSchema.extend({
     replace: z.boolean().default(true),
 });
 async function setCampaignLabels(args: z.infer<typeof SetCampaignLabelsSchema>) {
-    const customer = await getCustomer(args.customerId, args.userId);
+    const customer = await getCustomer(args.customerId);
     const escapedNames = args.labelNames.map(name => `'${escapeGaqlString(name)}'`);
     const labelQuery = `SELECT label.resource_name, label.name FROM label WHERE label.name IN (${escapedNames.join(",")})`;
-    const existing: any[] = await runQuery({ customerId: args.customerId, userId: args.userId, query: labelQuery });
+    const existing: any[] = await runQuery({ customerId: args.customerId, query: labelQuery });
     const existingByName = new Map<string, string>();
     for (const row of existing) {
         if (row?.label?.name && row?.label?.resource_name) {
@@ -300,11 +299,10 @@ async function setCampaignLabels(args: z.infer<typeof SetCampaignLabelsSchema>) 
             },
         })));
     }
-    const labelsNow: any[] = await runQuery({ customerId: args.customerId, userId: args.userId, query: labelQuery });
+    const labelsNow: any[] = await runQuery({ customerId: args.customerId, query: labelQuery });
     const desired = new Set<string>(labelsNow.map(row => row?.label?.resource_name).filter(Boolean));
     const existingCampaignLabels: any[] = await runQuery({
         customerId: args.customerId,
-        userId: args.userId,
         query: `SELECT campaign_label.resource_name, campaign_label.label
             FROM campaign_label
             WHERE campaign.id = ${args.campaignId}`,

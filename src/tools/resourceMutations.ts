@@ -135,7 +135,7 @@ function buildExpectedToolNames(config: FamilyConfig): string[] {
   return names;
 }
 
-export const MUTATE_COVERAGE_V23_EXPECTED_TOOL_NAMES: string[] = COVERAGE_FAMILIES.flatMap(
+export const RESOURCE_MUTATION_TOOL_NAMES: string[] = COVERAGE_FAMILIES.flatMap(
   buildExpectedToolNames
 );
 
@@ -158,7 +158,6 @@ async function listFamilyResources(resource: string, args: z.infer<typeof ListRe
 
   return runQuery({
     customerId: args.customerId,
-    userId: args.userId,
     query: `SELECT
       ${resource}.resource_name
     FROM ${resource}
@@ -173,7 +172,6 @@ async function getFamilyResource(resource: string, args: z.infer<typeof GetResou
 
   const rows = await runQuery({
     customerId: args.customerId,
-    userId: args.userId,
     query: `SELECT
       ${resource}.resource_name
     FROM ${resource}
@@ -188,7 +186,7 @@ async function getFamilyResource(resource: string, args: z.infer<typeof GetResou
 }
 
 async function createFamilyResource(operation: string, args: z.infer<typeof CreateResourceSchema>) {
-  const customer = await getCustomer(args.customerId, args.userId);
+  const customer = await getCustomer(args.customerId);
 
   return runMutation(customer, [
     {
@@ -200,7 +198,7 @@ async function createFamilyResource(operation: string, args: z.infer<typeof Crea
 }
 
 async function updateFamilyResource(operation: string, args: z.infer<typeof UpdateResourceSchema>) {
-  const customer = await getCustomer(args.customerId, args.userId);
+  const customer = await getCustomer(args.customerId);
 
   const updatePayload: Record<string, unknown> = {
     resource_name: args.resourceName,
@@ -228,7 +226,7 @@ async function updateFamilyResource(operation: string, args: z.infer<typeof Upda
 }
 
 async function removeFamilyResource(operation: string, args: z.infer<typeof RemoveResourceSchema>) {
-  const customer = await getCustomer(args.customerId, args.userId);
+  const customer = await getCustomer(args.customerId);
 
   return runMutation(customer, [
     {
@@ -260,7 +258,7 @@ function humanize(entity: string): string {
   return entity.replace(/_/g, " ");
 }
 
-export function registerMutateCoverageV23Tools(server: McpServer) {
+export function registerResourceMutationTools(server: McpServer) {
   for (const family of COVERAGE_FAMILIES) {
     const entityLabel = humanize(family.entity);
 
@@ -268,7 +266,7 @@ export function registerMutateCoverageV23Tools(server: McpServer) {
       server.registerTool(
         `list_${family.plural}`,
         {
-          description: `List ${entityLabel} resources.`,
+          description: `List ${entityLabel} rows in a Google Ads account (${family.entity} resource). Read-only GAQL with an optional WHERE filter and ORDER BY.`,
           inputSchema: ListResourceSchema.shape,
         },
         args => asTool(() => listFamilyResources(family.entity, args as z.infer<typeof ListResourceSchema>))
@@ -279,7 +277,7 @@ export function registerMutateCoverageV23Tools(server: McpServer) {
       server.registerTool(
         `get_${family.entity}`,
         {
-          description: `Get one ${entityLabel} resource by resource name.`,
+          description: `Read one ${entityLabel} row from a Google Ads account by its full ${family.entity} resource name.`,
           inputSchema: GetResourceSchema.shape,
         },
         args => asTool(() => getFamilyResource(family.entity, args as z.infer<typeof GetResourceSchema>))
@@ -290,7 +288,7 @@ export function registerMutateCoverageV23Tools(server: McpServer) {
       server.registerTool(
         `create_${family.entity}`,
         {
-          description: `Create one ${entityLabel} resource using raw payload fields.`,
+          description: `Create a ${entityLabel} in a Google Ads account (${family.entity} resource) from raw API payload fields.`,
           inputSchema: CreateResourceSchema.shape,
         },
         args =>
@@ -304,7 +302,7 @@ export function registerMutateCoverageV23Tools(server: McpServer) {
       server.registerTool(
         `update_${family.entity}`,
         {
-          description: `Update one ${entityLabel} resource using raw payload fields.`,
+          description: `Update a ${entityLabel} in a Google Ads account (${family.entity} resource) from raw API payload fields and a field mask.`,
           inputSchema: UpdateResourceSchema.shape,
         },
         args =>
@@ -318,7 +316,7 @@ export function registerMutateCoverageV23Tools(server: McpServer) {
       server.registerTool(
         `remove_${family.entity}`,
         {
-          description: `Remove one ${entityLabel} resource by resource name.`,
+          description: `Remove a ${entityLabel} from a Google Ads account (${family.entity} resource) by its full resource name. Irreversible.`,
           inputSchema: RemoveResourceSchema.shape,
         },
         args =>

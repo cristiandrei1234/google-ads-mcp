@@ -19,7 +19,6 @@ async function listAds(args: z.infer<typeof ListAdsSchema>) {
     const where = conditions.length > 0 ? `WHERE ${conditions.join(" AND ")}` : "";
     return runQuery({
         customerId: args.customerId,
-        userId: args.userId,
         query: `SELECT
       campaign.id,
       ad_group.id,
@@ -52,10 +51,9 @@ const UpdateAdContentSchema = BaseSchema.extend({
     status: z.enum(["ENABLED", "PAUSED"]).optional(),
 });
 async function updateAdContent(args: z.infer<typeof UpdateAdContentSchema>) {
-    const customer = await getCustomer(args.customerId, args.userId);
+    const customer = await getCustomer(args.customerId);
     const rows: any[] = await runQuery({
         customerId: args.customerId,
-        userId: args.userId,
         query: `SELECT
       ad_group_ad.resource_name,
       ad_group_ad.status,

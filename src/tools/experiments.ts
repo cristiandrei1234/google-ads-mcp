@@ -8,12 +8,11 @@ import { toErrorMessage } from "../observability/errorMessage.js";
 const ListExperimentsSchema = z.object({
   customerId: z.string().describe("The Google Ads Customer ID"),
   limit: z.number().default(50),
-  userId: z.string().optional().describe("SaaS User ID"),
 });
 
 export const ListExperimentsToolSchema = ListExperimentsSchema;
 export async function listExperiments(args: z.infer<typeof ListExperimentsSchema>) {
-  const customer = await getCustomer(args.customerId, args.userId);
+  const customer = await getCustomer(args.customerId);
   const query = `
     SELECT
       experiment.experiment_id,
@@ -47,12 +46,11 @@ const CreateExperimentSchema = z.object({
       "HOTEL_CUSTOM",
     ])
     .default("SEARCH_CUSTOM"),
-  userId: z.string().optional().describe("SaaS User ID"),
 });
 
 export const CreateExperimentToolSchema = CreateExperimentSchema;
 export async function createExperiment(args: z.infer<typeof CreateExperimentSchema>) {
-  const customer = await getCustomer(args.customerId, args.userId);
+  const customer = await getCustomer(args.customerId);
   const validateOnly = ["1", "true", "yes"].includes(
     (process.env.GOOGLE_ADS_VALIDATE_ONLY || "").toLowerCase()
   );
@@ -107,12 +105,11 @@ export async function createExperiment(args: z.infer<typeof CreateExperimentSche
 
 const ListReachPlanLocationsSchema = z.object({
   customerId: z.string().describe("The Google Ads Customer ID"),
-  userId: z.string().optional().describe("SaaS User ID"),
 });
 
 export const ListReachPlanLocationsToolSchema = ListReachPlanLocationsSchema;
 export async function listReachPlanLocations(args: z.infer<typeof ListReachPlanLocationsSchema>) {
-  const customer = await getCustomer(args.customerId, args.userId);
+  const customer = await getCustomer(args.customerId);
   
   try {
     const result = await (customer as any).reachPlans.listPlannableLocations({});
@@ -128,12 +125,11 @@ const GenerateReachForecastSchema = z.object({
   locationId: z.string().describe("The location ID (e.g., '2840' for US)"),
   currencyCode: z.string().default("USD"),
   budgetMicros: z.string().describe("The budget in micros (e.g., '10000000' for 10 units)"),
-  userId: z.string().optional().describe("SaaS User ID"),
 });
 
 export const GenerateReachForecastToolSchema = GenerateReachForecastSchema;
 export async function generateReachForecast(args: z.infer<typeof GenerateReachForecastSchema>) {
-  const customer = await getCustomer(args.customerId, args.userId);
+  const customer = await getCustomer(args.customerId);
 
   try {
     const products = await (customer as any).reachPlans.listPlannableProducts({

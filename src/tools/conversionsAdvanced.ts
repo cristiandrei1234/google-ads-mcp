@@ -13,7 +13,7 @@ const UpdateConversionActionSchema = BaseSchema.extend({
     includeInConversionsMetric: z.boolean().optional(),
 });
 async function updateConversionAction(args: z.infer<typeof UpdateConversionActionSchema>) {
-    const customer = await getCustomer(args.customerId, args.userId);
+    const customer = await getCustomer(args.customerId);
     const update: any = {
         resource_name: `customers/${args.customerId}/conversionActions/${args.conversionActionId}`,
     };
@@ -50,7 +50,7 @@ const RemoveConversionActionSchema = BaseSchema.extend({
     conversionActionId: z.string(),
 });
 async function removeConversionAction(args: z.infer<typeof RemoveConversionActionSchema>) {
-    const customer = await getCustomer(args.customerId, args.userId);
+    const customer = await getCustomer(args.customerId);
     return runMutation(customer, [
         {
             conversion_action_operation: {
@@ -68,7 +68,7 @@ const UploadCallConversionSchema = BaseSchema.extend({
     currencyCode: z.string().optional(),
 });
 async function uploadCallConversion(args: z.infer<typeof UploadCallConversionSchema>) {
-    const customer = await getCustomer(args.customerId, args.userId);
+    const customer = await getCustomer(args.customerId);
     return (customer as any).conversionUploads.uploadCallConversions({
         customer_id: args.customerId,
         conversions: [
@@ -94,7 +94,7 @@ const UploadConversionAdjustmentSchema = BaseSchema.extend({
     currencyCode: z.string().optional(),
 });
 async function uploadConversionAdjustment(args: z.infer<typeof UploadConversionAdjustmentSchema>) {
-    const customer = await getCustomer(args.customerId, args.userId);
+    const customer = await getCustomer(args.customerId);
     const adjustment: any = {
         conversion_action: `customers/${args.customerId}/conversionActions/${args.conversionActionId}`,
         adjustment_type: args.adjustmentType,
@@ -124,7 +124,7 @@ const CreateOfflineUserDataJobSchema = BaseSchema.extend({
     type: z.enum(["CUSTOMER_MATCH_USER_LIST"]).default("CUSTOMER_MATCH_USER_LIST"),
 });
 async function createOfflineUserDataJob(args: z.infer<typeof CreateOfflineUserDataJobSchema>) {
-    const customer = await getCustomer(args.customerId, args.userId);
+    const customer = await getCustomer(args.customerId);
     return (customer as any).offlineUserDataJobs.createOfflineUserDataJob({
         customer_id: args.customerId,
         job: {
@@ -143,7 +143,7 @@ const AddOfflineUserDataJobOperationsSchema = BaseSchema.extend({
 });
 async function addOfflineUserDataJobOperations(args: z.infer<typeof AddOfflineUserDataJobOperationsSchema>) {
     assertResourceBelongsToCustomer(args.resourceName, args.customerId);
-    const customer = await getCustomer(args.customerId, args.userId);
+    const customer = await getCustomer(args.customerId);
     return (customer as any).offlineUserDataJobs.addOfflineUserDataJobOperations({
         resource_name: args.resourceName,
         operations: args.operations,
@@ -156,7 +156,7 @@ const RunOfflineUserDataJobSchema = BaseSchema.extend({
 });
 async function runOfflineUserDataJob(args: z.infer<typeof RunOfflineUserDataJobSchema>) {
     assertResourceBelongsToCustomer(args.resourceName, args.customerId);
-    const customer = await getCustomer(args.customerId, args.userId);
+    const customer = await getCustomer(args.customerId);
     return (customer as any).offlineUserDataJobs.runOfflineUserDataJob({
         resource_name: args.resourceName,
     });

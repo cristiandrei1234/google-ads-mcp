@@ -39,7 +39,6 @@ async function listCustomerConversionGoals(args: z.infer<typeof ListCustomerConv
 
   return runQuery({
     customerId: args.customerId,
-    userId: args.userId,
     query: `SELECT
       customer_conversion_goal.resource_name,
       customer_conversion_goal.category,
@@ -61,7 +60,7 @@ const SetCustomerConversionGoalSchema = BaseSchema.extend({
 });
 
 async function setCustomerConversionGoal(args: z.infer<typeof SetCustomerConversionGoalSchema>) {
-  const customer = await getCustomer(args.customerId, args.userId);
+  const customer = await getCustomer(args.customerId);
 
   const resourceName =
     args.resourceName ||
@@ -104,7 +103,6 @@ async function listCampaignConversionGoals(args: z.infer<typeof ListCampaignConv
 
   return runQuery({
     customerId: args.customerId,
-    userId: args.userId,
     query: `SELECT
       campaign_conversion_goal.resource_name,
       campaign_conversion_goal.campaign,
@@ -132,7 +130,7 @@ const SetCampaignConversionGoalSchema = BaseSchema.extend({
 });
 
 async function setCampaignConversionGoal(args: z.infer<typeof SetCampaignConversionGoalSchema>) {
-  const customer = await getCustomer(args.customerId, args.userId);
+  const customer = await getCustomer(args.customerId);
 
   const resourceName =
     args.resourceName ||

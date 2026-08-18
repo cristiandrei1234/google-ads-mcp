@@ -49,7 +49,6 @@ const ListBiddingStrategiesSchema = BaseSchema.extend({
 async function listBiddingStrategies(args: z.infer<typeof ListBiddingStrategiesSchema>) {
   return runQuery({
     customerId: args.customerId,
-    userId: args.userId,
     query: `SELECT
       bidding_strategy.resource_name,
       bidding_strategy.id,
@@ -99,7 +98,7 @@ const CreatePortfolioBiddingStrategySchema = BaseSchema.extend({
 });
 
 async function createPortfolioBiddingStrategy(args: z.infer<typeof CreatePortfolioBiddingStrategySchema>) {
-  const customer = await getCustomer(args.customerId, args.userId);
+  const customer = await getCustomer(args.customerId);
 
   const create: Record<string, unknown> = {
     name: args.name,
@@ -178,7 +177,7 @@ const UpdatePortfolioBiddingStrategySchema = BaseSchema.extend({
 });
 
 async function updatePortfolioBiddingStrategy(args: z.infer<typeof UpdatePortfolioBiddingStrategySchema>) {
-  const customer = await getCustomer(args.customerId, args.userId);
+  const customer = await getCustomer(args.customerId);
 
   const update: Record<string, unknown> = {
     resource_name: toBiddingStrategyResourceName(args.customerId, args.biddingStrategyId),
@@ -284,7 +283,7 @@ const RemovePortfolioBiddingStrategySchema = BaseSchema.extend({
 });
 
 async function removePortfolioBiddingStrategy(args: z.infer<typeof RemovePortfolioBiddingStrategySchema>) {
-  const customer = await getCustomer(args.customerId, args.userId);
+  const customer = await getCustomer(args.customerId);
 
   return runMutation(customer, [
     {
@@ -301,7 +300,7 @@ const SetCampaignPortfolioBiddingStrategySchema = BaseSchema.extend({
 });
 
 async function setCampaignPortfolioBiddingStrategy(args: z.infer<typeof SetCampaignPortfolioBiddingStrategySchema>) {
-  const customer = await getCustomer(args.customerId, args.userId);
+  const customer = await getCustomer(args.customerId);
 
   return runMutation(customer, [
     {
@@ -323,7 +322,7 @@ const ClearCampaignPortfolioBiddingStrategySchema = BaseSchema.extend({
 });
 
 async function clearCampaignPortfolioBiddingStrategy(args: z.infer<typeof ClearCampaignPortfolioBiddingStrategySchema>) {
-  const customer = await getCustomer(args.customerId, args.userId);
+  const customer = await getCustomer(args.customerId);
 
   return runMutation(customer, [
     {
@@ -347,7 +346,6 @@ const ListBiddingSeasonalityAdjustmentsSchema = BaseSchema.extend({
 async function listBiddingSeasonalityAdjustments(args: z.infer<typeof ListBiddingSeasonalityAdjustmentsSchema>) {
   return runQuery({
     customerId: args.customerId,
-    userId: args.userId,
     query: `SELECT
       bidding_seasonality_adjustment.resource_name,
       bidding_seasonality_adjustment.seasonality_adjustment_id,
@@ -390,7 +388,7 @@ const CreateBiddingSeasonalityAdjustmentSchema = SeasonalityBaseSchema.extend({
 async function createBiddingSeasonalityAdjustment(
   args: z.infer<typeof CreateBiddingSeasonalityAdjustmentSchema>
 ) {
-  const customer = await getCustomer(args.customerId, args.userId);
+  const customer = await getCustomer(args.customerId);
 
   const create: Record<string, unknown> = {
     name: args.name,
@@ -434,7 +432,7 @@ const UpdateBiddingSeasonalityAdjustmentSchema = SeasonalityBaseSchema.extend({
 async function updateBiddingSeasonalityAdjustment(
   args: z.infer<typeof UpdateBiddingSeasonalityAdjustmentSchema>
 ) {
-  const customer = await getCustomer(args.customerId, args.userId);
+  const customer = await getCustomer(args.customerId);
 
   const update: Record<string, unknown> = {
     resource_name: toSeasonalityAdjustmentResourceName(args.customerId, args.seasonalityAdjustmentId),
@@ -503,7 +501,7 @@ const RemoveBiddingSeasonalityAdjustmentSchema = BaseSchema.extend({
 async function removeBiddingSeasonalityAdjustment(
   args: z.infer<typeof RemoveBiddingSeasonalityAdjustmentSchema>
 ) {
-  const customer = await getCustomer(args.customerId, args.userId);
+  const customer = await getCustomer(args.customerId);
 
   return runMutation(customer, [
     {
@@ -521,7 +519,6 @@ const ListBiddingDataExclusionsSchema = BaseSchema.extend({
 async function listBiddingDataExclusions(args: z.infer<typeof ListBiddingDataExclusionsSchema>) {
   return runQuery({
     customerId: args.customerId,
-    userId: args.userId,
     query: `SELECT
       bidding_data_exclusion.resource_name,
       bidding_data_exclusion.data_exclusion_id,
@@ -548,7 +545,7 @@ const CreateBiddingDataExclusionSchema = SeasonalityBaseSchema.extend({
 });
 
 async function createBiddingDataExclusion(args: z.infer<typeof CreateBiddingDataExclusionSchema>) {
-  const customer = await getCustomer(args.customerId, args.userId);
+  const customer = await getCustomer(args.customerId);
 
   const create: Record<string, unknown> = {
     name: args.name,
@@ -588,7 +585,7 @@ const UpdateBiddingDataExclusionSchema = SeasonalityBaseSchema.extend({
 });
 
 async function updateBiddingDataExclusion(args: z.infer<typeof UpdateBiddingDataExclusionSchema>) {
-  const customer = await getCustomer(args.customerId, args.userId);
+  const customer = await getCustomer(args.customerId);
 
   const update: Record<string, unknown> = {
     resource_name: toDataExclusionResourceName(args.customerId, args.dataExclusionId),
@@ -651,7 +648,7 @@ const RemoveBiddingDataExclusionSchema = BaseSchema.extend({
 });
 
 async function removeBiddingDataExclusion(args: z.infer<typeof RemoveBiddingDataExclusionSchema>) {
-  const customer = await getCustomer(args.customerId, args.userId);
+  const customer = await getCustomer(args.customerId);
 
   return runMutation(customer, [
     {

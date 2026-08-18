@@ -19,7 +19,6 @@ async function listKeywords(args: z.infer<typeof ListKeywordsSchema>) {
         filters.push(`ad_group.id = ${args.adGroupId}`);
     return runQuery({
         customerId: args.customerId,
-        userId: args.userId,
         query: `SELECT
       campaign.id,
       ad_group.id,
@@ -42,7 +41,7 @@ const UpdateKeywordSchema = BaseSchema.extend({
     matchType: MatchTypeSchema.optional(),
 });
 async function updateKeyword(args: z.infer<typeof UpdateKeywordSchema>) {
-    const customer = await getCustomer(args.customerId, args.userId);
+    const customer = await getCustomer(args.customerId);
     const resourceName = `customers/${args.customerId}/adGroupCriteria/${args.adGroupId}~${args.keywordId}`;
     const changingText = Boolean(args.text || args.matchType);
     if (!changingText) {
@@ -70,7 +69,6 @@ async function updateKeyword(args: z.infer<typeof UpdateKeywordSchema>) {
     }
     const rows: any[] = await runQuery({
         customerId: args.customerId,
-        userId: args.userId,
         query: `SELECT
       ad_group_criterion.status,
       ad_group_criterion.cpc_bid_micros,
@@ -122,7 +120,7 @@ const BulkAddKeywordsSchema = BaseSchema.extend({
     })),
 });
 async function bulkAddKeywords(args: z.infer<typeof BulkAddKeywordsSchema>) {
-    const customer = await getCustomer(args.customerId, args.userId);
+    const customer = await getCustomer(args.customerId);
     const operations = args.keywords.map(keyword => ({
         ad_group_criterion_operation: {
             create: {
@@ -150,7 +148,7 @@ const BulkUpdateKeywordsSchema = BaseSchema.extend({
     })),
 });
 async function bulkUpdateKeywords(args: z.infer<typeof BulkUpdateKeywordsSchema>) {
-    const customer = await getCustomer(args.customerId, args.userId);
+    const customer = await getCustomer(args.customerId);
     const operations: any[] = [];
     for (const entry of args.updates) {
         const update: any = {
@@ -180,7 +178,7 @@ const BulkRemoveKeywordsSchema = BaseSchema.extend({
     removals: z.array(z.object({ adGroupId: z.string(), keywordId: z.string() })),
 });
 async function bulkRemoveKeywords(args: z.infer<typeof BulkRemoveKeywordsSchema>) {
-    const customer = await getCustomer(args.customerId, args.userId);
+    const customer = await getCustomer(args.customerId);
     const operations = args.removals.map(entry => ({
         ad_group_criterion_operation: {
             remove: `customers/${args.customerId}/adGroupCriteria/${entry.adGroupId}~${entry.keywordId}`,

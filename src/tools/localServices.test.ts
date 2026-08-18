@@ -29,6 +29,6 @@ describe("listLocalServicesLeads", () => {
 
   it("passes userId to getCustomer", async () => {
     await listLocalServicesLeads({ customerId: "1", limit: 50, userId: "u" });
-    expect(getCustomer).toHaveBeenCalledWith("1", "u");
+    expect(getCustomer).toHaveBeenCalledWith("1");
   });
 });

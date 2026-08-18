@@ -5,12 +5,11 @@ import logger from "../observability/logger.js";
 const ListLocalServicesLeadsSchema = z.object({
   customerId: z.string().describe("The Google Ads Customer ID"),
   limit: z.number().default(50),
-  userId: z.string().optional().describe("SaaS User ID"),
 });
 
 export const ListLocalServicesLeadsToolSchema = ListLocalServicesLeadsSchema;
 export async function listLocalServicesLeads(args: z.infer<typeof ListLocalServicesLeadsSchema>) {
-  const customer = await getCustomer(args.customerId, args.userId);
+  const customer = await getCustomer(args.customerId);
   
   const query = `
     SELECT

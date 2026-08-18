@@ -32,7 +32,7 @@ describe("conversions handlers", () => {
       userId: "u-1",
     } as any);
 
-    expect(getCustomer).toHaveBeenCalledWith("1", "u-1");
+    expect(getCustomer).toHaveBeenCalledWith("1");
     const ops = (runMutation as any).mock.calls[0][1];
     expect(ops[0].conversion_action_operation.create).toEqual({
       name: "Purchase",
@@ -50,7 +50,7 @@ describe("conversions handlers", () => {
       type: "UPLOAD_CLICKS",
       category: "LEAD",
     } as any);
-    expect(getCustomer).toHaveBeenCalledWith("2", undefined);
+    expect(getCustomer).toHaveBeenCalledWith("2");
     const create = (runMutation as any).mock.calls[0][1][0].conversion_action_operation.create;
     expect(create.type).toBe("UPLOAD_CLICKS");
   });
@@ -65,7 +65,7 @@ describe("conversions handlers", () => {
     const q = customer.query.mock.calls[0][0];
     expect(q).toContain("FROM conversion_action");
     expect(q).toContain("conversion_action.include_in_conversions_metric");
-    expect(getCustomer).toHaveBeenCalledWith("1", "u");
+    expect(getCustomer).toHaveBeenCalledWith("1");
   });
 
   it("uploadClickConversion sends a full conversion payload with value and currency", async () => {

@@ -50,15 +50,14 @@ export function getClient(): GoogleAdsApi {
  * customer. The owning connection's MCC is used as login_customer_id and its
  * refresh token (decrypted in memory) authenticates the call.
  *
- * Single-operator fallback (no userId): uses GOOGLE_ADS_REFRESH_TOKEN and the
+ * Single-operator fallback (no identity): uses GOOGLE_ADS_REFRESH_TOKEN and the
  * optional GOOGLE_ADS_LOGIN_CUSTOMER_ID from the environment.
  *
- * SECURITY: the authenticated identity (AsyncLocalStorage) is authoritative.
- * Any caller-supplied `userId` argument is IGNORED so a client cannot act as
- * another tenant by passing someone else's id. The `_ignoredUserId` parameter
- * is retained only for call-site compatibility during the transition.
+ * SECURITY: the identity comes from the authenticated session
+ * (AsyncLocalStorage) and from nowhere else. No tool schema advertises a
+ * `userId`, so a client cannot act as another tenant by naming one.
  */
-export async function getCustomer(customerId: string, _ignoredUserId?: string) {
+export async function getCustomer(customerId: string) {
   const api = getClient();
   const normalizedCustomerId = normalizeCustomerId(customerId);
   const userId = getIdentity()?.userId;

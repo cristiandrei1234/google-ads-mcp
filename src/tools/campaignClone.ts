@@ -35,17 +35,15 @@ function normalizeMatchType(raw: unknown): "BROAD" | "PHRASE" | "EXACT" {
         return "EXACT";
     return "PHRASE";
 }
-async function copyAdGroupsKeywordsAndAds(customer: any, customerId: string, userId: string | undefined, sourceCampaignId: string, targetCampaignId: string, status: "ENABLED" | "PAUSED") {
+async function copyAdGroupsKeywordsAndAds(customer: any, customerId: string, sourceCampaignId: string, targetCampaignId: string, status: "ENABLED" | "PAUSED") {
     const [adGroups, keywords, ads] = await Promise.all([
         runQuery({
             customerId,
-            userId,
             query: `SELECT ad_group.id, ad_group.name, ad_group.status, ad_group.type, ad_group.cpc_bid_micros
               FROM ad_group WHERE campaign.id = ${sourceCampaignId}`,
         }),
         runQuery({
             customerId,
-            userId,
             query: `SELECT ad_group.id, ad_group_criterion.status, ad_group_criterion.cpc_bid_micros, ad_group_criterion.keyword.text, ad_group_criterion.keyword.match_type
               FROM keyword_view
               WHERE campaign.id = ${sourceCampaignId}
@@ -53,7 +51,6 @@ async function copyAdGroupsKeywordsAndAds(customer: any, customerId: string, use
         }),
         runQuery({
             customerId,
-            userId,
             query: `SELECT ad_group.id, ad_group_ad.status, ad_group_ad.ad.final_urls, ad_group_ad.ad.responsive_search_ad.headlines, ad_group_ad.ad.responsive_search_ad.descriptions, ad_group_ad.ad.responsive_search_ad.path1, ad_group_ad.ad.responsive_search_ad.path2
               FROM ad_group_ad
               WHERE campaign.id = ${sourceCampaignId}
@@ -143,10 +140,9 @@ async function copyAdGroupsKeywordsAndAds(customer: any, customerId: string, use
     }
     return { adGroupsCreated: adGroupMap.size, keywordsCopied: keywordOps.length, adsCopied: adOps.length };
 }
-async function copyCampaignNegatives(customer: any, customerId: string, userId: string | undefined, sourceCampaignId: string, targetCampaignId: string) {
+async function copyCampaignNegatives(customer: any, customerId: string, sourceCampaignId: string, targetCampaignId: string) {
     const negatives: any[] = await runQuery({
         customerId,
-        userId,
         query: `SELECT campaign_criterion.keyword.text, campaign_criterion.keyword.match_type
             FROM campaign_criterion
             WHERE campaign.id = ${sourceCampaignId}
@@ -205,16 +201,14 @@ function buildCloneCampaignCreate(sourceCampaign: any, campaignName: string, bud
 }
 async function cloneCampaignInternal(args: {
     customerId: string;
-    userId?: string;
     sourceCampaignId: string;
     campaignName: string;
     status: "ENABLED" | "PAUSED";
     copyNegatives: boolean;
 }) {
-    const customer = await getCustomer(args.customerId, args.userId);
+    const customer = await getCustomer(args.customerId);
     const sourceRows: any[] = await runQuery({
         customerId: args.customerId,
-        userId: args.userId,
         query: `SELECT campaign.id, campaign.name, campaign.bidding_strategy_type, campaign.advertising_channel_type, campaign.network_settings.target_google_search, campaign.network_settings.target_search_network, campaign.network_settings.target_content_network, campaign.network_settings.target_partner_search_network, campaign.contains_eu_political_advertising, campaign.campaign_budget
             FROM campaign
             WHERE campaign.id = ${args.sourceCampaignId}
@@ -225,7 +219,6 @@ async function cloneCampaignInternal(args: {
     const sourceCampaign = sourceRows[0].campaign;
     const budgetRows: any[] = await runQuery({
         customerId: args.customerId,
-        userId: args.userId,
         query: `SELECT campaign_budget.name, campaign_budget.amount_micros
             FROM campaign_budget
             WHERE campaign_budget.resource_name = '${sourceCampaign.campaign_budget}'
@@ -257,9 +250,9 @@ async function cloneCampaignInternal(args: {
     ]);
     const campaignResourceName = extractResourceName(campaignResult, "campaign_result");
     const targetCampaignId = campaignResourceName.split("/").pop() || "";
-    const copied = await copyAdGroupsKeywordsAndAds(customer, args.customerId, args.userId, args.sourceCampaignId, targetCampaignId, args.status);
+    const copied = await copyAdGroupsKeywordsAndAds(customer, args.customerId, args.sourceCampaignId, targetCampaignId, args.status);
     const negativesCopied = args.copyNegatives
-        ? await copyCampaignNegatives(customer, args.customerId, args.userId, args.sourceCampaignId, targetCampaignId)
+        ? await copyCampaignNegatives(customer, args.customerId, args.sourceCampaignId, targetCampaignId)
         : 0;
     return { targetCampaignId, campaignResourceName, budgetResourceName, negativesCopied, ...copied };
 }
@@ -273,7 +266,6 @@ async function duplicateCampaign(args: z.infer<typeof DuplicateCampaignSchema>) 
     const name = args.targetCampaignName || `Campaign Copy ${new Date().toISOString().slice(0, 19)}`;
     return cloneCampaignInternal({
         customerId: args.customerId,
-        userId: args.userId,
         sourceCampaignId: args.sourceCampaignId,
         campaignName: name,
         status: args.status,
@@ -289,7 +281,6 @@ const DuplicateCampaignByDeviceSchema = BaseSchema.extend({
 async function duplicateCampaignByDevice(args: z.infer<typeof DuplicateCampaignByDeviceSchema>) {
     const desktop = await cloneCampaignInternal({
         customerId: args.customerId,
-        userId: args.userId,
         sourceCampaignId: args.sourceCampaignId,
         campaignName: args.desktopCampaignName || `Desktop Copy ${new Date().toISOString().slice(0, 19)}`,
         status: "PAUSED",
@@ -297,17 +288,15 @@ async function duplicateCampaignByDevice(args: z.infer<typeof DuplicateCampaignB
     });
     const mobile = await cloneCampaignInternal({
         customerId: args.customerId,
-        userId: args.userId,
         sourceCampaignId: args.sourceCampaignId,
         campaignName: args.mobileCampaignName || `Mobile Copy ${new Date().toISOString().slice(0, 19)}`,
         status: "PAUSED",
         copyNegatives: args.copyCampaignNegatives,
     });
-    const customer = await getCustomer(args.customerId, args.userId);
+    const customer = await getCustomer(args.customerId);
     const split = async (campaignId: string, variant: Variant) => {
         const rows: any[] = await runQuery({
             customerId: args.customerId,
-            userId: args.userId,
             query: `SELECT campaign_criterion.resource_name, campaign_criterion.device.type
               FROM campaign_criterion
               WHERE campaign.id = ${campaignId}

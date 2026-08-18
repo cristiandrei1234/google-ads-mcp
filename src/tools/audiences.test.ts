@@ -25,7 +25,7 @@ describe("audiences tools", () => {
       userId: "u1",
     });
 
-    expect(getCustomer).toHaveBeenCalledWith("1", "u1");
+    expect(getCustomer).toHaveBeenCalledWith("1");
     const ops = (runMutation as any).mock.calls[0][1];
     expect(ops[0].user_list_operation.create).toEqual({
       name: "My List",
@@ -43,7 +43,7 @@ describe("audiences tools", () => {
       membershipLifeSpan: 30,
     } as any);
 
-    expect(getCustomer).toHaveBeenCalledWith("2", undefined);
+    expect(getCustomer).toHaveBeenCalledWith("2");
     const create = (runMutation as any).mock.calls[0][1][0].user_list_operation.create;
     expect(create.description).toBeUndefined();
     expect(create.membership_life_span).toBe(30);
@@ -55,7 +55,7 @@ describe("audiences tools", () => {
 
     const result = await listUserLists({ customerId: "3", userId: "u9" });
 
-    expect(getCustomer).toHaveBeenCalledWith("3", "u9");
+    expect(getCustomer).toHaveBeenCalledWith("3");
     const customer = await (getCustomer as any).mock.results[0].value;
     const query = customer.query.mock.calls[0][0];
     expect(query).toContain("FROM user_list");

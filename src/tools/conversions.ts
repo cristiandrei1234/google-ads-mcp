@@ -20,12 +20,11 @@ const CreateConversionActionSchema = z.object({
     .default("WEBPAGE")
     .describe("The conversion action type"),
   category: z.string().default("DEFAULT").describe("The category (e.g., PURCHASE, LEAD, SIGNUP)"),
-  userId: z.string().optional().describe("SaaS User ID"),
 });
 
 export const CreateConversionActionToolSchema = CreateConversionActionSchema;
 export async function createConversionAction(args: z.infer<typeof CreateConversionActionSchema>) {
-  const customer = await getCustomer(args.customerId, args.userId);
+  const customer = await getCustomer(args.customerId);
   
   const operation = {
     conversion_action_operation: {
@@ -43,12 +42,11 @@ export async function createConversionAction(args: z.infer<typeof CreateConversi
 
 const ListConversionActionsSchema = z.object({
   customerId: z.string().describe("The Google Ads Customer ID"),
-  userId: z.string().optional().describe("SaaS User ID"),
 });
 
 export const ListConversionActionsToolSchema = ListConversionActionsSchema;
 export async function listConversionActions(args: z.infer<typeof ListConversionActionsSchema>) {
-  const customer = await getCustomer(args.customerId, args.userId);
+  const customer = await getCustomer(args.customerId);
   const query = `
     SELECT 
       conversion_action.id,
@@ -74,12 +72,11 @@ const UploadClickConversionSchema = z.object({
   conversionDateTime: z.string().describe("The date and time of the conversion (e.g., '2023-10-27 12:32:45-05:00')"),
   conversionValue: z.number().optional().describe("The value of the conversion"),
   currencyCode: z.string().optional().describe("Currency code (e.g., USD)"),
-  userId: z.string().optional().describe("SaaS User ID"),
 });
 
 export const UploadClickConversionToolSchema = UploadClickConversionSchema;
 export async function uploadClickConversion(args: z.infer<typeof UploadClickConversionSchema>) {
-  const customer = await getCustomer(args.customerId, args.userId);
+  const customer = await getCustomer(args.customerId);
   
   // For uploading click conversions, we don't use the standard mutator as it targets specific services.
   // We use customer.conversionUploads.uploadClickConversions()

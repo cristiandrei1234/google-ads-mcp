@@ -16,7 +16,7 @@ describe("listPolicyFindings", () => {
     const c = fakeCustomer([{ p: 1 }]);
     (getCustomer as any).mockResolvedValue(c);
     const res = await listPolicyFindings({ customerId: "1", limit: 50 });
-    expect(getCustomer).toHaveBeenCalledWith("1", undefined);
+    expect(getCustomer).toHaveBeenCalledWith("1");
     const q = c.query.mock.calls[0][0];
     expect(q).toContain("FROM ad_group_ad");
     expect(q).toContain("approval_status != 'APPROVED'");
@@ -28,7 +28,7 @@ describe("listPolicyFindings", () => {
     const c = fakeCustomer([]);
     (getCustomer as any).mockResolvedValue(c);
     await listPolicyFindings({ customerId: "1", limit: 3, userId: "u" });
-    expect(getCustomer).toHaveBeenCalledWith("1", "u");
+    expect(getCustomer).toHaveBeenCalledWith("1");
     expect(c.query.mock.calls[0][0]).toContain("LIMIT 3");
   });
 });

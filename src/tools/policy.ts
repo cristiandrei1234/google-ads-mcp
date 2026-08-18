@@ -6,7 +6,6 @@ import logger from "../observability/logger.js";
 const DismissPolicyFindingSchema = z.object({
   customerId: z.string().describe("The Google Ads Customer ID"),
   resourceName: z.string().describe("The resource name of the policy finding (e.g., ad group ad)"),
-  userId: z.string().optional().describe("SaaS User ID"),
 });
 
 // Note: Dismissing policy findings is usually done via an exemption request on the Ad or Asset.
@@ -20,12 +19,11 @@ const DismissPolicyFindingSchema = z.object({
 const ListPolicyFindingsSchema = z.object({
   customerId: z.string().describe("The Google Ads Customer ID"),
   limit: z.number().default(50),
-  userId: z.string().optional().describe("SaaS User ID"),
 });
 
 export const ListPolicyFindingsToolSchema = ListPolicyFindingsSchema;
 export async function listPolicyFindings(args: z.infer<typeof ListPolicyFindingsSchema>) {
-  const customer = await getCustomer(args.customerId, args.userId);
+  const customer = await getCustomer(args.customerId);
   
   // We can query ad_group_ad_policy_summary or asset_policy_summary
   // Correcting fields

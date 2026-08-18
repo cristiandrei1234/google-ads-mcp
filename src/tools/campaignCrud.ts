@@ -12,7 +12,7 @@ const CreateCampaignBudgetSchema = BaseSchema.extend({
     explicitlyShared: z.boolean().default(false),
 });
 async function createCampaignBudget(args: z.infer<typeof CreateCampaignBudgetSchema>) {
-    const customer = await getCustomer(args.customerId, args.userId);
+    const customer = await getCustomer(args.customerId);
     return runMutation(customer, [
         {
             campaign_budget_operation: {
@@ -33,7 +33,7 @@ const UpdateCampaignBudgetSchema = BaseSchema.extend({
     deliveryMethod: z.enum(["STANDARD", "ACCELERATED"]).optional(),
 });
 async function updateCampaignBudget(args: z.infer<typeof UpdateCampaignBudgetSchema>) {
-    const customer = await getCustomer(args.customerId, args.userId);
+    const customer = await getCustomer(args.customerId);
     const update: any = {
         resource_name: `customers/${args.customerId}/campaignBudgets/${args.budgetId}`,
     };
@@ -74,7 +74,6 @@ async function listCampaigns(args: z.infer<typeof ListCampaignsSchema>) {
     const where = filters.length > 0 ? `WHERE ${filters.join(" AND ")}` : "";
     return runQuery({
         customerId: args.customerId,
-        userId: args.userId,
         query: `SELECT
       campaign.id,
       campaign.name,
@@ -109,7 +108,7 @@ const CreateCampaignSchema = BaseSchema.extend({
     endDate: z.string().optional(),
 });
 async function createCampaign(args: z.infer<typeof CreateCampaignSchema>) {
-    const customer = await getCustomer(args.customerId, args.userId);
+    const customer = await getCustomer(args.customerId);
     const create: any = {
         name: args.name,
         status: args.status,
@@ -146,7 +145,7 @@ const UpdateCampaignSettingsSchema = BaseSchema.extend({
     endDate: z.string().optional(),
 });
 async function updateCampaignSettings(args: z.infer<typeof UpdateCampaignSettingsSchema>) {
-    const customer = await getCustomer(args.customerId, args.userId);
+    const customer = await getCustomer(args.customerId);
     const update: any = {
         resource_name: `customers/${args.customerId}/campaigns/${args.campaignId}`,
     };
@@ -184,7 +183,7 @@ const AttachCampaignBudgetSchema = BaseSchema.extend({
     budgetId: z.string(),
 });
 async function attachCampaignBudget(args: z.infer<typeof AttachCampaignBudgetSchema>) {
-    const customer = await getCustomer(args.customerId, args.userId);
+    const customer = await getCustomer(args.customerId);
     return runMutation(customer, [
         {
             campaign_operation: {
@@ -206,7 +205,6 @@ const DetachCampaignBudgetSchema = BaseSchema.extend({
 async function detachCampaignBudget(args: z.infer<typeof DetachCampaignBudgetSchema>) {
     return attachCampaignBudget({
         customerId: args.customerId,
-        userId: args.userId,
         campaignId: args.campaignId,
         budgetId: args.fallbackBudgetId,
     });
@@ -219,7 +217,7 @@ const SetCampaignNetworkSettingsSchema = BaseSchema.extend({
     targetPartnerSearchNetwork: z.boolean(),
 });
 async function setCampaignNetworkSettings(args: z.infer<typeof SetCampaignNetworkSettingsSchema>) {
-    const customer = await getCustomer(args.customerId, args.userId);
+    const customer = await getCustomer(args.customerId);
     return runMutation(customer, [
         {
             campaign_operation: {

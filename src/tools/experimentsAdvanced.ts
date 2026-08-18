@@ -27,7 +27,7 @@ const UpdateExperimentSchema = BaseSchema.extend({
     status: z.enum(["SETUP", "INITIATED", "HALTED", "PROMOTED", "GRADUATED"]).optional(),
 });
 async function updateExperiment(args: z.infer<typeof UpdateExperimentSchema>) {
-    const customer = await getCustomer(args.customerId, args.userId);
+    const customer = await getCustomer(args.customerId);
     const update: Record<string, unknown> = {
         resource_name: toExperimentResourceName(args.customerId, args.experimentId),
     };
@@ -62,7 +62,7 @@ const ScheduleExperimentSchema = BaseSchema.extend({
     waitForCompletion: z.boolean().default(false),
 });
 async function scheduleExperiment(args: z.infer<typeof ScheduleExperimentSchema>) {
-    const customer = await getCustomer(args.customerId, args.userId);
+    const customer = await getCustomer(args.customerId);
     const service = (customer as any).loadService("ExperimentServiceClient");
     const resourceName = toExperimentResourceName(args.customerId, args.experimentId);
     const validateOnly = resolveValidateOnlyFlag(args.validateOnly);
@@ -92,7 +92,7 @@ const PromoteExperimentSchema = BaseSchema.extend({
     waitForCompletion: z.boolean().default(false),
 });
 async function promoteExperiment(args: z.infer<typeof PromoteExperimentSchema>) {
-    const customer = await getCustomer(args.customerId, args.userId);
+    const customer = await getCustomer(args.customerId);
     const service = (customer as any).loadService("ExperimentServiceClient");
     const resourceName = toExperimentResourceName(args.customerId, args.experimentId);
     const validateOnly = resolveValidateOnlyFlag(args.validateOnly);
@@ -121,7 +121,7 @@ const EndExperimentSchema = BaseSchema.extend({
     validateOnly: z.boolean().optional().describe("Validate only without applying"),
 });
 async function endExperiment(args: z.infer<typeof EndExperimentSchema>) {
-    const customer = await getCustomer(args.customerId, args.userId);
+    const customer = await getCustomer(args.customerId);
     const service = (customer as any).loadService("ExperimentServiceClient");
     const resourceName = toExperimentResourceName(args.customerId, args.experimentId);
     const validateOnly = resolveValidateOnlyFlag(args.validateOnly);
@@ -143,7 +143,7 @@ const RemoveExperimentSchema = BaseSchema.extend({
     experimentId: z.string().describe("Experiment ID or resource name"),
 });
 async function removeExperiment(args: z.infer<typeof RemoveExperimentSchema>) {
-    const customer = await getCustomer(args.customerId, args.userId);
+    const customer = await getCustomer(args.customerId);
     return runMutation(customer, [
         {
             experiment_operation: {
@@ -160,7 +160,6 @@ async function listExperimentArms(args: z.infer<typeof ListExperimentArmsSchema>
     const resourceName = toExperimentResourceName(args.customerId, args.experimentId);
     return runQuery({
         customerId: args.customerId,
-        userId: args.userId,
         query: `SELECT
       experiment_arm.resource_name,
       experiment_arm.name,
@@ -177,7 +176,7 @@ const ListExperimentAsyncErrorsSchema = BaseSchema.extend({
     pageToken: z.string().optional(),
 });
 async function listExperimentAsyncErrors(args: z.infer<typeof ListExperimentAsyncErrorsSchema>) {
-    const customer = await getCustomer(args.customerId, args.userId);
+    const customer = await getCustomer(args.customerId);
     const service = (customer as any).loadService("ExperimentServiceClient");
     const resourceName = toExperimentResourceName(args.customerId, args.experimentId);
     const [statuses, request, response] = await service.listExperimentAsyncErrors({

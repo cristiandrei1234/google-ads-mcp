@@ -54,7 +54,7 @@ describe("listAudienceInsights", () => {
 
   it("passes userId to getCustomer", async () => {
     await listAudienceInsights({ customerId: "1", customerInsightsGroup: "g", dimensions: ["X"], userId: "u" });
-    expect(getCustomer).toHaveBeenCalledWith("1", "u");
+    expect(getCustomer).toHaveBeenCalledWith("1");
   });
 
   it("logs and rethrows on failure", async () => {

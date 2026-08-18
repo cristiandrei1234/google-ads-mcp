@@ -33,7 +33,7 @@ describe("ads tools", () => {
       userId: "u1",
     });
 
-    expect(getCustomer).toHaveBeenCalledWith("123", "u1");
+    expect(getCustomer).toHaveBeenCalledWith("123");
     expect((runMutation as any).mock.calls[0][0]).toBe(customer);
     const create = (runMutation as any).mock.calls[0][1][0].ad_group_ad_operation.create;
     expect(create.ad_group).toBe("customers/123/adGroups/55");
@@ -61,7 +61,7 @@ describe("ads tools", () => {
       descriptions: [{ text: "D" }, { text: "E" }],
       finalUrls: ["https://x.com"],
     });
-    expect(getCustomer).toHaveBeenCalledWith("1", undefined);
+    expect(getCustomer).toHaveBeenCalledWith("1");
     const rsa = (runMutation as any).mock.calls[0][1][0].ad_group_ad_operation.create.ad.responsive_search_ad;
     expect(rsa.path1).toBeUndefined();
     expect(rsa.path2).toBeUndefined();
@@ -69,7 +69,7 @@ describe("ads tools", () => {
 
   it("pauseAd updates status to PAUSED on the composite ad resource", async () => {
     await pauseAd({ customerId: "123", adId: "9", adGroupId: "55" });
-    expect(getCustomer).toHaveBeenCalledWith("123", undefined);
+    expect(getCustomer).toHaveBeenCalledWith("123");
     const op = (runMutation as any).mock.calls[0][1][0].ad_group_ad_operation;
     expect(op.update).toEqual({ resource_name: "customers/123/adGroupAds/55~9", status: "PAUSED" });
     expect(op.update_mask.paths).toEqual(["status"]);
@@ -77,7 +77,7 @@ describe("ads tools", () => {
 
   it("enableAd updates status to ENABLED and forwards userId", async () => {
     await enableAd({ customerId: "123", adId: "9", adGroupId: "55", userId: "u1" });
-    expect(getCustomer).toHaveBeenCalledWith("123", "u1");
+    expect(getCustomer).toHaveBeenCalledWith("123");
     const op = (runMutation as any).mock.calls[0][1][0].ad_group_ad_operation;
     expect(op.update.status).toBe("ENABLED");
     expect(op.update.resource_name).toBe("customers/123/adGroupAds/55~9");
@@ -86,13 +86,13 @@ describe("ads tools", () => {
 
   it("removeAd issues a remove operation and forwards userId", async () => {
     await removeAd({ customerId: "123", adId: "9", adGroupId: "55", userId: "u2" });
-    expect(getCustomer).toHaveBeenCalledWith("123", "u2");
+    expect(getCustomer).toHaveBeenCalledWith("123");
     const op = (runMutation as any).mock.calls[0][1][0].ad_group_ad_operation;
     expect(op).toEqual({ remove: "customers/123/adGroupAds/55~9" });
   });
 
   it("removeAd works without userId", async () => {
     await removeAd({ customerId: "1", adId: "2", adGroupId: "3" });
-    expect(getCustomer).toHaveBeenCalledWith("1", undefined);
+    expect(getCustomer).toHaveBeenCalledWith("1");
   });
 });

@@ -10,12 +10,11 @@ const CreateUserListSchema = z.object({
   name: z.string().describe("Name of the user list"),
   description: z.string().optional().describe("Description of the user list"),
   membershipLifeSpan: z.number().optional().default(30).describe("Number of days a user remains in the list (default 30, max 540)"),
-  userId: z.string().optional().describe("SaaS User ID"),
 });
 
 export const CreateUserListToolSchema = CreateUserListSchema;
 export async function createUserList(args: z.infer<typeof CreateUserListSchema>) {
-  const customer = await getCustomer(args.customerId, args.userId);
+  const customer = await getCustomer(args.customerId);
   
   // Creating a basic CRM based user list (Customer Match)
   // or a logical user list. Let's default to CRM_BASED as it's common for uploads.
@@ -40,12 +39,11 @@ export async function createUserList(args: z.infer<typeof CreateUserListSchema>)
 
 const ListUserListsSchema = z.object({
   customerId: z.string().describe("The Google Ads Customer ID"),
-  userId: z.string().optional().describe("SaaS User ID"),
 });
 
 export const ListUserListsToolSchema = ListUserListsSchema;
 export async function listUserLists(args: z.infer<typeof ListUserListsSchema>) {
-  const customer = await getCustomer(args.customerId, args.userId);
+  const customer = await getCustomer(args.customerId);
   const query = `
     SELECT 
       user_list.id,

@@ -10,12 +10,11 @@ const GetSearchTermsSchema = z.object({
   adGroupId: z.string().optional().describe("Filter by Ad Group ID"),
   limit: z.number().default(50).describe("Max number of search terms to retrieve"),
   dateRange: z.enum(["TODAY", "YESTERDAY", "LAST_7_DAYS", "LAST_30_DAYS", "THIS_MONTH", "LAST_MONTH"]).default("LAST_30_DAYS").describe("Date range for the report"),
-  userId: z.string().optional().describe("SaaS User ID"),
 });
 
 export const GetSearchTermsToolSchema = GetSearchTermsSchema;
 export async function getSearchTerms(args: z.infer<typeof GetSearchTermsSchema>) {
-  const customer = await getCustomer(args.customerId, args.userId);
+  const customer = await getCustomer(args.customerId);
   
   let queryWithMetrics = `
     SELECT
@@ -86,12 +85,11 @@ const GetChangeHistorySchema = z.object({
   startDate: z.string().optional().describe("Start date (YYYY-MM-DD)"),
   endDate: z.string().optional().describe("End date (YYYY-MM-DD)"),
   resourceTypes: z.array(z.string()).optional().describe("Filter by resource types (e.g., CAMPAIGN, AD_GROUP)"),
-  userId: z.string().optional().describe("SaaS User ID"),
 });
 
 export const GetChangeHistoryToolSchema = GetChangeHistorySchema;
 export async function getChangeHistory(args: z.infer<typeof GetChangeHistorySchema>) {
-  const customer = await getCustomer(args.customerId, args.userId);
+  const customer = await getCustomer(args.customerId);
   
   let query = `
     SELECT

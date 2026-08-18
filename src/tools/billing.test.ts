@@ -28,7 +28,7 @@ describe("listInvoices", () => {
       issueYear: "2026",
       issueMonth: "MARCH",
     });
-    expect(getCustomer).toHaveBeenCalledWith("1", undefined);
+    expect(getCustomer).toHaveBeenCalledWith("1");
     expect(c.invoices.listInvoices).toHaveBeenCalledWith({
       customer_id: "1",
       billing_setup: "customers/1/billingSetups/bs-9",
@@ -46,7 +46,7 @@ describe("listInvoices", () => {
     await expect(
       listInvoices({ customerId: "1", billingSetupId: "b", issueYear: "2026", issueMonth: "JUNE", userId: "u" })
     ).rejects.toThrow("invoice boom");
-    expect(getCustomer).toHaveBeenCalledWith("1", "u");
+    expect(getCustomer).toHaveBeenCalledWith("1");
   });
 });
 
@@ -64,7 +64,7 @@ describe("listAccountBudgets", () => {
     const c = fakeCustomer([]);
     (getCustomer as any).mockResolvedValue(c);
     await listAccountBudgets({ customerId: "1", limit: 9, userId: "u" });
-    expect(getCustomer).toHaveBeenCalledWith("1", "u");
+    expect(getCustomer).toHaveBeenCalledWith("1");
     expect(c.query.mock.calls[0][0]).toContain("LIMIT 9");
   });
 });
@@ -74,7 +74,7 @@ describe("listBillingSetups", () => {
     const c = fakeCustomer([{ s: 1 }]);
     (getCustomer as any).mockResolvedValue(c);
     const res = await listBillingSetups({ customerId: "1", userId: "u" });
-    expect(getCustomer).toHaveBeenCalledWith("1", "u");
+    expect(getCustomer).toHaveBeenCalledWith("1");
     expect(c.query.mock.calls[0][0]).toContain("FROM billing_setup");
     expect(res).toEqual([{ s: 1 }]);
   });

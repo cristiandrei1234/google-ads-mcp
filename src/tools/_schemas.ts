@@ -1,15 +1,14 @@
 import { z } from "zod";
 
 /**
- * Identity fields shared by every tool's input schema.
+ * Fields shared by every tool's input schema.
  *
- * `userId` is kept here only for transitional call-site typing — the registered
- * schema strips it (see createServer.ts) because the authenticated session is
- * authoritative and identity is never accepted from the client.
+ * Identity is deliberately absent: it comes from the authenticated session
+ * (AsyncLocalStorage), never from arguments, so a client cannot act as another
+ * tenant by naming one.
  */
 export const BaseSchema = z.object({
-  customerId: z.string().describe("The Google Ads Customer ID"),
-  userId: z.string().optional().describe("SaaS User ID"),
+  customerId: z.string().describe("Google Ads customer ID, digits only (no dashes)."),
 });
 
 /** {@link BaseSchema} plus a bounded `limit` for list-style tools. */

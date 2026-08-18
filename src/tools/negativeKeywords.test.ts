@@ -29,7 +29,7 @@ describe("negativeKeywords tools", () => {
       text: "free stuff",
       matchType: "PHRASE",
     });
-    expect(getCustomer).toHaveBeenCalledWith("123", undefined);
+    expect(getCustomer).toHaveBeenCalledWith("123");
     const op = (runMutation as any).mock.calls[0][1][0];
     expect(op.ad_group_criterion_operation.create).toEqual({
       ad_group: "customers/123/adGroups/456",
@@ -49,7 +49,7 @@ describe("negativeKeywords tools", () => {
       matchType: "BROAD",
       userId: "user-1",
     });
-    expect(getCustomer).toHaveBeenCalledWith("123", "user-1");
+    expect(getCustomer).toHaveBeenCalledWith("123");
   });
 
   it("removeAdGroupNegativeKeyword builds a remove op with composite resource name", async () => {

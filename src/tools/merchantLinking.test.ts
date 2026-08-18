@@ -43,7 +43,7 @@ describe("linkMerchantCenter", () => {
 
   it("passes userId to getCustomer", async () => {
     await linkMerchantCenter({ customerId: "1", merchantCenterId: "100", userId: "u1" });
-    expect(getCustomer).toHaveBeenCalledWith("1", "u1");
+    expect(getCustomer).toHaveBeenCalledWith("1");
   });
 
   it("throws on non-numeric merchantCenterId", async () => {

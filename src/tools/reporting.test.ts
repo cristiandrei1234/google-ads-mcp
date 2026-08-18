@@ -36,7 +36,7 @@ describe("getSearchTerms", () => {
       dateRange: "TODAY",
       userId: "u",
     } as any);
-    expect(getCustomer).toHaveBeenCalledWith("1", "u");
+    expect(getCustomer).toHaveBeenCalledWith("1");
     const q = c.query.mock.calls[0][0];
     expect(q).toContain("AND campaign.id = 11");
     expect(q).toContain("AND ad_group.id = 22");
@@ -119,7 +119,7 @@ describe("getChangeHistory", () => {
       endDate: "2026-02-01",
       userId: "u",
     } as any);
-    expect(getCustomer).toHaveBeenCalledWith("1", "u");
+    expect(getCustomer).toHaveBeenCalledWith("1");
     const q = c.query.mock.calls[0][0];
     expect(q).toContain("BETWEEN '2026-01-01' AND '2026-02-01'");
     expect(q).not.toContain("LAST_14_DAYS");

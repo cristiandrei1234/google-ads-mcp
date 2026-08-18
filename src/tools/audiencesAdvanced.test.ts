@@ -61,10 +61,9 @@ describe("audiencesAdvanced tools", () => {
     expect((runQuery as any).mock.calls[0][0].query).not.toContain("WHERE");
     expect((runQuery as any).mock.calls[0][0].query).toContain("LIMIT 5");
 
-    await call("list_custom_audiences", { customerId: "1", limit: 7, status: "ENABLED", userId: "u" });
+    await call("list_custom_audiences", { customerId: "1", limit: 7, status: "ENABLED" });
     const q = (runQuery as any).mock.calls[1][0];
     expect(q.query).toContain("WHERE custom_audience.status = ENABLED");
-    expect(q.userId).toBe("u");
     expect(q.customerId).toBe("1");
   });
 

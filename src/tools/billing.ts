@@ -11,12 +11,11 @@ const ListInvoicesSchema = z.object({
     "JANUARY", "FEBRUARY", "MARCH", "APRIL", "MAY", "JUNE", 
     "JULY", "AUGUST", "SEPTEMBER", "OCTOBER", "NOVEMBER", "DECEMBER"
   ]).describe("The issue month"),
-  userId: z.string().optional().describe("SaaS User ID"),
 });
 
 export const ListInvoicesToolSchema = ListInvoicesSchema;
 export async function listInvoices(args: z.infer<typeof ListInvoicesSchema>) {
-  const customer = await getCustomer(args.customerId, args.userId);
+  const customer = await getCustomer(args.customerId);
   
   try {
     const result = await customer.invoices.listInvoices({
@@ -35,12 +34,11 @@ export async function listInvoices(args: z.infer<typeof ListInvoicesSchema>) {
 const ListAccountBudgetsSchema = z.object({
   customerId: z.string().describe("The Google Ads Customer ID"),
   limit: z.number().default(50),
-  userId: z.string().optional().describe("SaaS User ID"),
 });
 
 export const ListAccountBudgetsToolSchema = ListAccountBudgetsSchema;
 export async function listAccountBudgets(args: z.infer<typeof ListAccountBudgetsSchema>) {
-  const customer = await getCustomer(args.customerId, args.userId);
+  const customer = await getCustomer(args.customerId);
   
   const query = `
     SELECT
@@ -63,12 +61,11 @@ export async function listAccountBudgets(args: z.infer<typeof ListAccountBudgets
 
 const ListBillingSetupsSchema = z.object({
   customerId: z.string().describe("The Google Ads Customer ID"),
-  userId: z.string().optional().describe("SaaS User ID"),
 });
 
 export const ListBillingSetupsToolSchema = ListBillingSetupsSchema;
 export async function listBillingSetups(args: z.infer<typeof ListBillingSetupsSchema>) {
-  const customer = await getCustomer(args.customerId, args.userId);
+  const customer = await getCustomer(args.customerId);
   
   const query = `
     SELECT

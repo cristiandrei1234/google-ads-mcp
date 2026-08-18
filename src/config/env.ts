@@ -59,6 +59,13 @@ const envSchema = z.object({
     .string()
     .optional()
     .transform(s => ['1', 'true', 'yes'].includes((s ?? '').trim().toLowerCase())),
+  // Comma-separated tool groups to register (see policies/toolsets.ts), or
+  // 'all'. Unset registers the default groups.
+  GOOGLE_ADS_TOOLSETS: z.string().optional().transform(s => s?.trim()),
+  // Ceiling on the characters a single tool result may put into the model's
+  // context. Oversized results are truncated with a message telling the caller
+  // how to narrow the query. Default: 100_000.
+  GOOGLE_ADS_MAX_RESULT_CHARS: z.coerce.number().int().positive().optional(),
   MERCHANT_CENTER_ID: z.string().optional().transform(s => s?.trim()),
   LOG_LEVEL: z.enum(['debug', 'info', 'warn', 'error']).default('info'),
 

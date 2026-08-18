@@ -5,15 +5,15 @@ vi.mock("../services/google-ads/mutator.js", () => ({ runMutation: vi.fn() }));
 vi.mock("./runQuery.js", () => ({ runQuery: vi.fn() }));
 
 import {
-  registerMutateCoverageV23Tools,
-  MUTATE_COVERAGE_V23_EXPECTED_TOOL_NAMES,
-} from "./mutateCoverageV23.js";
+  registerResourceMutationTools,
+  RESOURCE_MUTATION_TOOL_NAMES,
+} from "./resourceMutations.js";
 import { getCustomer } from "../services/google-ads/client.js";
 import { runMutation } from "../services/google-ads/mutator.js";
 import { runQuery } from "./runQuery.js";
 import { captureTools, getTool, toolJson, fakeCustomer } from "../test/harness.js";
 
-const tools = captureTools(registerMutateCoverageV23Tools);
+const tools = captureTools(registerResourceMutationTools);
 const call = (name: string, args: unknown) => getTool(tools, name).handler(args);
 
 beforeEach(() => {
@@ -23,9 +23,9 @@ beforeEach(() => {
   (runQuery as any).mockResolvedValue([{ ad_group_bid_modifier: { resource_name: "x" } }]);
 });
 
-describe("mutateCoverageV23 registration", () => {
+describe("resource mutation tools registration", () => {
   it("registers exactly the expected tool names", () => {
-    expect([...tools.keys()].sort()).toEqual([...MUTATE_COVERAGE_V23_EXPECTED_TOOL_NAMES].sort());
+    expect([...tools.keys()].sort()).toEqual([...RESOURCE_MUTATION_TOOL_NAMES].sort());
   });
 
   it("does not register list/get for ad family (skipListTool + skipGetTool) but registers update", () => {
@@ -144,7 +144,7 @@ describe("create family resource", () => {
       ad_group: "customers/1/adGroups/7",
       bid_modifier: 1.5,
     });
-    expect(getCustomer).toHaveBeenCalledWith("1", undefined);
+    expect(getCustomer).toHaveBeenCalledWith("1");
   });
 });
 

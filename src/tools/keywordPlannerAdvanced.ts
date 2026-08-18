@@ -12,7 +12,7 @@ const GenerateKeywordHistoricalMetricsSchema = BaseSchema.extend({
     keywordPlanNetwork: z.enum(["GOOGLE_SEARCH", "GOOGLE_SEARCH_AND_PARTNERS"]).default("GOOGLE_SEARCH_AND_PARTNERS"),
 });
 async function generateKeywordHistoricalMetrics(args: z.infer<typeof GenerateKeywordHistoricalMetricsSchema>) {
-    const customer = await getCustomer(args.customerId, args.userId);
+    const customer = await getCustomer(args.customerId);
     return (customer as any).keywordPlanIdeas.generateKeywordHistoricalMetrics({
         customer_id: args.customerId,
         keywords: args.keywords,
@@ -34,7 +34,7 @@ const GenerateKeywordForecastMetricsSchema = BaseSchema.extend({
     keywordPlanNetwork: z.enum(["GOOGLE_SEARCH", "GOOGLE_SEARCH_AND_PARTNERS"]).default("GOOGLE_SEARCH_AND_PARTNERS"),
 });
 async function generateKeywordForecastMetrics(args: z.infer<typeof GenerateKeywordForecastMetricsSchema>) {
-    const customer = await getCustomer(args.customerId, args.userId);
+    const customer = await getCustomer(args.customerId);
     return (customer as any).keywordPlanIdeas.generateKeywordForecastMetrics({
         customer_id: args.customerId,
         currency_code: args.currencyCode,
@@ -77,7 +77,7 @@ const CreateKeywordPlanSchema = BaseSchema.extend({
         .default("NEXT_QUARTER"),
 });
 async function createKeywordPlan(args: z.infer<typeof CreateKeywordPlanSchema>) {
-    const customer = await getCustomer(args.customerId, args.userId);
+    const customer = await getCustomer(args.customerId);
     return (customer as any).keywordPlans.create([
         {
             name: args.name,
@@ -93,7 +93,7 @@ const UpdateKeywordPlanSchema = BaseSchema.extend({
     forecastDateInterval: z.enum(["NEXT_QUARTER", "NEXT_MONTH", "NEXT_YEAR"]).optional(),
 });
 async function updateKeywordPlan(args: z.infer<typeof UpdateKeywordPlanSchema>) {
-    const customer = await getCustomer(args.customerId, args.userId);
+    const customer = await getCustomer(args.customerId);
     const update: any = {
         resource_name: `customers/${args.customerId}/keywordPlans/${args.keywordPlanId}`,
     };
@@ -109,7 +109,7 @@ const RemoveKeywordPlanSchema = BaseSchema.extend({
     keywordPlanId: z.string(),
 });
 async function removeKeywordPlan(args: z.infer<typeof RemoveKeywordPlanSchema>) {
-    const customer = await getCustomer(args.customerId, args.userId);
+    const customer = await getCustomer(args.customerId);
     return (customer as any).keywordPlans.remove([
         `customers/${args.customerId}/keywordPlans/${args.keywordPlanId}`,
     ]);
@@ -123,7 +123,7 @@ const CreateKeywordPlanCampaignSchema = BaseSchema.extend({
     keywordPlanNetwork: z.enum(["GOOGLE_SEARCH", "GOOGLE_SEARCH_AND_PARTNERS"]).default("GOOGLE_SEARCH_AND_PARTNERS"),
 });
 async function createKeywordPlanCampaign(args: z.infer<typeof CreateKeywordPlanCampaignSchema>) {
-    const customer = await getCustomer(args.customerId, args.userId);
+    const customer = await getCustomer(args.customerId);
     return (customer as any).keywordPlanCampaigns.create([
         {
             keyword_plan: `customers/${args.customerId}/keywordPlans/${args.keywordPlanId}`,
@@ -143,7 +143,7 @@ const CreateKeywordPlanAdGroupSchema = BaseSchema.extend({
     cpcBidMicros: z.number().int().positive(),
 });
 async function createKeywordPlanAdGroup(args: z.infer<typeof CreateKeywordPlanAdGroupSchema>) {
-    const customer = await getCustomer(args.customerId, args.userId);
+    const customer = await getCustomer(args.customerId);
     return (customer as any).keywordPlanAdGroups.create([
         {
             keyword_plan_campaign: `customers/${args.customerId}/keywordPlanCampaigns/${args.keywordPlanCampaignId}`,
@@ -157,7 +157,7 @@ const AddKeywordPlanKeywordsSchema = BaseSchema.extend({
     keywords: z.array(z.object({ text: z.string(), matchType: MatchTypeSchema, cpcBidMicros: z.number().int().positive().optional(), negative: z.boolean().default(false) })).min(1),
 });
 async function addKeywordPlanKeywords(args: z.infer<typeof AddKeywordPlanKeywordsSchema>) {
-    const customer = await getCustomer(args.customerId, args.userId);
+    const customer = await getCustomer(args.customerId);
     return (customer as any).keywordPlanAdGroupKeywords.create(args.keywords.map(keyword => ({
         keyword_plan_ad_group: `customers/${args.customerId}/keywordPlanAdGroups/${args.keywordPlanAdGroupId}`,
         text: keyword.text,

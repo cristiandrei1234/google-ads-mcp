@@ -40,7 +40,6 @@ async function listCampaignDrafts(args: z.infer<typeof ListCampaignDraftsSchema>
 
   return runQuery({
     customerId: args.customerId,
-    userId: args.userId,
     query: `SELECT
       campaign_draft.resource_name,
       campaign_draft.draft_id,
@@ -63,7 +62,7 @@ const CreateCampaignDraftSchema = BaseSchema.extend({
 });
 
 async function createCampaignDraft(args: z.infer<typeof CreateCampaignDraftSchema>) {
-  const customer = await getCustomer(args.customerId, args.userId);
+  const customer = await getCustomer(args.customerId);
 
   return runMutation(customer, [
     {
@@ -84,7 +83,7 @@ const UpdateCampaignDraftSchema = BaseSchema.extend({
 });
 
 async function updateCampaignDraft(args: z.infer<typeof UpdateCampaignDraftSchema>) {
-  const customer = await getCustomer(args.customerId, args.userId);
+  const customer = await getCustomer(args.customerId);
 
   const update: Record<string, unknown> = {
     resource_name: toCampaignDraftResourceName(args.customerId, args.draftId),
@@ -120,7 +119,7 @@ const RemoveCampaignDraftSchema = BaseSchema.extend({
 });
 
 async function removeCampaignDraft(args: z.infer<typeof RemoveCampaignDraftSchema>) {
-  const customer = await getCustomer(args.customerId, args.userId);
+  const customer = await getCustomer(args.customerId);
 
   return runMutation(customer, [
     {
@@ -138,7 +137,7 @@ const PromoteCampaignDraftSchema = BaseSchema.extend({
 });
 
 async function promoteCampaignDraft(args: z.infer<typeof PromoteCampaignDraftSchema>) {
-  const customer = await getCustomer(args.customerId, args.userId);
+  const customer = await getCustomer(args.customerId);
   const service = (customer as any).loadService("CampaignDraftServiceClient");
   const resourceName = toCampaignDraftResourceName(args.customerId, args.draftId);
   const validateOnly = resolveValidateOnlyFlag(args.validateOnly);
@@ -176,7 +175,7 @@ const ListCampaignDraftAsyncErrorsSchema = BaseSchema.extend({
 });
 
 async function listCampaignDraftAsyncErrors(args: z.infer<typeof ListCampaignDraftAsyncErrorsSchema>) {
-  const customer = await getCustomer(args.customerId, args.userId);
+  const customer = await getCustomer(args.customerId);
   const service = (customer as any).loadService("CampaignDraftServiceClient");
   const resourceName = toCampaignDraftResourceName(args.customerId, args.draftId);
 

@@ -30,7 +30,7 @@ describe("listRecommendations", () => {
     const c = customerWithRecs();
     (getCustomer as any).mockResolvedValue(c);
     const res = await listRecommendations({ customerId: "1", limit: 50 });
-    expect(getCustomer).toHaveBeenCalledWith("1", undefined);
+    expect(getCustomer).toHaveBeenCalledWith("1");
     expect(c.query.mock.calls[0][0]).toContain("FROM recommendation");
     expect(c.query.mock.calls[0][0]).toContain("LIMIT 50");
     expect(res).toEqual([{ recommendation: { type: "X" } }]);
@@ -40,7 +40,7 @@ describe("listRecommendations", () => {
     const c = customerWithRecs();
     (getCustomer as any).mockResolvedValue(c);
     await listRecommendations({ customerId: "1", limit: 7, userId: "u" });
-    expect(getCustomer).toHaveBeenCalledWith("1", "u");
+    expect(getCustomer).toHaveBeenCalledWith("1");
     expect(c.query.mock.calls[0][0]).toContain("LIMIT 7");
   });
 });

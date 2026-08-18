@@ -12,7 +12,6 @@ const ListSharedNegativeKeywordListsSchema = BaseSchema.extend({
 async function listSharedNegativeKeywordLists(args: z.infer<typeof ListSharedNegativeKeywordListsSchema>) {
     return runQuery({
         customerId: args.customerId,
-        userId: args.userId,
         query: `SELECT
       shared_set.id,
       shared_set.name,
@@ -30,7 +29,7 @@ const CreateSharedNegativeKeywordListSchema = BaseSchema.extend({
         .default([]),
 });
 async function createSharedNegativeKeywordList(args: z.infer<typeof CreateSharedNegativeKeywordListSchema>) {
-    const customer = await getCustomer(args.customerId, args.userId);
+    const customer = await getCustomer(args.customerId);
     const createResult: any = await runMutation(customer, [
         {
             shared_set_operation: {
@@ -69,7 +68,7 @@ const UpdateSharedNegativeKeywordListSchema = BaseSchema.extend({
     name: z.string(),
 });
 async function updateSharedNegativeKeywordList(args: z.infer<typeof UpdateSharedNegativeKeywordListSchema>) {
-    const customer = await getCustomer(args.customerId, args.userId);
+    const customer = await getCustomer(args.customerId);
     return runMutation(customer, [
         {
             shared_set_operation: {
@@ -88,7 +87,7 @@ const RemoveSharedNegativeKeywordListSchema = BaseSchema.extend({
     sharedSetId: z.string(),
 });
 async function removeSharedNegativeKeywordList(args: z.infer<typeof RemoveSharedNegativeKeywordListSchema>) {
-    const customer = await getCustomer(args.customerId, args.userId);
+    const customer = await getCustomer(args.customerId);
     return runMutation(customer, [
         {
             shared_set_operation: {
@@ -102,7 +101,7 @@ const AttachSharedNegativeListToCampaignSchema = BaseSchema.extend({
     sharedSetId: z.string(),
 });
 async function attachSharedNegativeListToCampaign(args: z.infer<typeof AttachSharedNegativeListToCampaignSchema>) {
-    const customer = await getCustomer(args.customerId, args.userId);
+    const customer = await getCustomer(args.customerId);
     return runMutation(customer, [
         {
             campaign_shared_set_operation: {
@@ -119,7 +118,7 @@ const DetachSharedNegativeListFromCampaignSchema = BaseSchema.extend({
     sharedSetId: z.string(),
 });
 async function detachSharedNegativeListFromCampaign(args: z.infer<typeof DetachSharedNegativeListFromCampaignSchema>) {
-    const customer = await getCustomer(args.customerId, args.userId);
+    const customer = await getCustomer(args.customerId);
     return runMutation(customer, [
         {
             campaign_shared_set_operation: {
@@ -134,7 +133,7 @@ const AddSharedNegativeKeywordSchema = BaseSchema.extend({
     matchType: MatchTypeSchema,
 });
 async function addSharedNegativeKeyword(args: z.infer<typeof AddSharedNegativeKeywordSchema>) {
-    const customer = await getCustomer(args.customerId, args.userId);
+    const customer = await getCustomer(args.customerId);
     return runMutation(customer, [
         {
             shared_criterion_operation: {
@@ -154,7 +153,7 @@ const RemoveSharedNegativeKeywordSchema = BaseSchema.extend({
     criterionId: z.string(),
 });
 async function removeSharedNegativeKeyword(args: z.infer<typeof RemoveSharedNegativeKeywordSchema>) {
-    const customer = await getCustomer(args.customerId, args.userId);
+    const customer = await getCustomer(args.customerId);
     return runMutation(customer, [
         {
             shared_criterion_operation: {
@@ -169,7 +168,6 @@ const ListCustomerNegativeCriteriaSchema = BaseSchema.extend({
 async function listCustomerNegativeCriteria(args: z.infer<typeof ListCustomerNegativeCriteriaSchema>) {
     return runQuery({
         customerId: args.customerId,
-        userId: args.userId,
         query: `SELECT
       customer_negative_criterion.criterion_id,
       customer_negative_criterion.resource_name,
@@ -183,7 +181,7 @@ const AddCustomerNegativePlacementSchema = BaseSchema.extend({
     placementUrl: z.string().url(),
 });
 async function addCustomerNegativePlacement(args: z.infer<typeof AddCustomerNegativePlacementSchema>) {
-    const customer = await getCustomer(args.customerId, args.userId);
+    const customer = await getCustomer(args.customerId);
     return runMutation(customer, [
         {
             customer_negative_criterion_operation: {
@@ -200,7 +198,7 @@ const RemoveCustomerNegativeCriterionSchema = BaseSchema.extend({
     criterionId: z.string(),
 });
 async function removeCustomerNegativeCriterion(args: z.infer<typeof RemoveCustomerNegativeCriterionSchema>) {
-    const customer = await getCustomer(args.customerId, args.userId);
+    const customer = await getCustomer(args.customerId);
     return runMutation(customer, [
         {
             customer_negative_criterion_operation: {

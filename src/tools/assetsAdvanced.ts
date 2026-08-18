@@ -65,7 +65,6 @@ async function listAssetGroups(args: z.infer<typeof ListAssetGroupsSchema>) {
     const where = filters.length > 0 ? `WHERE ${filters.join(" AND ")}` : "";
     return runQuery({
         customerId: args.customerId,
-        userId: args.userId,
         query: `SELECT
       asset_group.id,
       asset_group.name,
@@ -90,7 +89,7 @@ const CreateAssetGroupSchema = BaseSchema.extend({
     path2: z.string().optional(),
 });
 async function createAssetGroup(args: z.infer<typeof CreateAssetGroupSchema>) {
-    const customer = await getCustomer(args.customerId, args.userId);
+    const customer = await getCustomer(args.customerId);
     const create: Record<string, unknown> = {
         campaign: toCampaignResourceName(args.customerId, args.campaignId),
         name: args.name,
@@ -116,7 +115,7 @@ const UpdateAssetGroupSchema = BaseSchema.extend({
     path2: z.string().optional(),
 });
 async function updateAssetGroup(args: z.infer<typeof UpdateAssetGroupSchema>) {
-    const customer = await getCustomer(args.customerId, args.userId);
+    const customer = await getCustomer(args.customerId);
     const update: Record<string, unknown> = {
         resource_name: toAssetGroupResourceName(args.customerId, args.assetGroupId),
     };
@@ -157,7 +156,7 @@ const RemoveAssetGroupSchema = BaseSchema.extend({
     assetGroupId: z.string().describe("Asset group ID or resource name"),
 });
 async function removeAssetGroup(args: z.infer<typeof RemoveAssetGroupSchema>) {
-    const customer = await getCustomer(args.customerId, args.userId);
+    const customer = await getCustomer(args.customerId);
     return runMutation(customer, [
         {
             asset_group_operation: {
@@ -172,7 +171,7 @@ const LinkCustomerAssetSchema = BaseSchema.extend({
     status: z.enum(["ENABLED", "PAUSED"]).default("ENABLED"),
 });
 async function linkCustomerAsset(args: z.infer<typeof LinkCustomerAssetSchema>) {
-    const customer = await getCustomer(args.customerId, args.userId);
+    const customer = await getCustomer(args.customerId);
     return runMutation(customer, [
         {
             customer_asset_operation: {
@@ -193,7 +192,7 @@ const UnlinkCustomerAssetSchema = BaseSchema.extend({
     message: "Provide resourceName or both assetId and fieldType.",
 });
 async function unlinkCustomerAsset(args: z.infer<typeof UnlinkCustomerAssetSchema>) {
-    const customer = await getCustomer(args.customerId, args.userId);
+    const customer = await getCustomer(args.customerId);
     const resourceName = args.resourceName || toCustomerAssetResourceName(args.customerId, args.assetId!, args.fieldType!);
     return runMutation(customer, [
         {
@@ -210,7 +209,7 @@ const LinkCampaignAssetSchema = BaseSchema.extend({
     status: z.enum(["ENABLED", "PAUSED"]).default("ENABLED"),
 });
 async function linkCampaignAsset(args: z.infer<typeof LinkCampaignAssetSchema>) {
-    const customer = await getCustomer(args.customerId, args.userId);
+    const customer = await getCustomer(args.customerId);
     return runMutation(customer, [
         {
             campaign_asset_operation: {
@@ -233,7 +232,7 @@ const UnlinkCampaignAssetSchema = BaseSchema.extend({
     message: "Provide resourceName or campaignId+assetId+fieldType.",
 });
 async function unlinkCampaignAsset(args: z.infer<typeof UnlinkCampaignAssetSchema>) {
-    const customer = await getCustomer(args.customerId, args.userId);
+    const customer = await getCustomer(args.customerId);
     const resourceName = args.resourceName ||
         toCampaignAssetResourceName(args.customerId, args.campaignId!, args.assetId!, args.fieldType!);
     return runMutation(customer, [
@@ -251,7 +250,7 @@ const LinkAdGroupAssetSchema = BaseSchema.extend({
     status: z.enum(["ENABLED", "PAUSED"]).default("ENABLED"),
 });
 async function linkAdGroupAsset(args: z.infer<typeof LinkAdGroupAssetSchema>) {
-    const customer = await getCustomer(args.customerId, args.userId);
+    const customer = await getCustomer(args.customerId);
     return runMutation(customer, [
         {
             ad_group_asset_operation: {
@@ -274,7 +273,7 @@ const UnlinkAdGroupAssetSchema = BaseSchema.extend({
     message: "Provide resourceName or adGroupId+assetId+fieldType.",
 });
 async function unlinkAdGroupAsset(args: z.infer<typeof UnlinkAdGroupAssetSchema>) {
-    const customer = await getCustomer(args.customerId, args.userId);
+    const customer = await getCustomer(args.customerId);
     const resourceName = args.resourceName || toAdGroupAssetResourceName(args.customerId, args.adGroupId!, args.assetId!, args.fieldType!);
     return runMutation(customer, [
         {
@@ -291,7 +290,7 @@ const LinkAssetGroupAssetSchema = BaseSchema.extend({
     status: z.enum(["ENABLED", "PAUSED"]).default("ENABLED"),
 });
 async function linkAssetGroupAsset(args: z.infer<typeof LinkAssetGroupAssetSchema>) {
-    const customer = await getCustomer(args.customerId, args.userId);
+    const customer = await getCustomer(args.customerId);
     return runMutation(customer, [
         {
             asset_group_asset_operation: {
@@ -314,7 +313,7 @@ const UnlinkAssetGroupAssetSchema = BaseSchema.extend({
     message: "Provide resourceName or assetGroupId+assetId+fieldType.",
 });
 async function unlinkAssetGroupAsset(args: z.infer<typeof UnlinkAssetGroupAssetSchema>) {
-    const customer = await getCustomer(args.customerId, args.userId);
+    const customer = await getCustomer(args.customerId);
     const resourceName = args.resourceName ||
         toAssetGroupAssetResourceName(args.customerId, args.assetGroupId!, args.assetId!, args.fieldType!);
     return runMutation(customer, [
@@ -337,7 +336,6 @@ async function queryCustomerLinks(args: z.infer<typeof ListAssetLinksSchema>) {
     const filter = buildAssetTypeFilter(args.assetTypes);
     return runQuery({
         customerId: args.customerId,
-        userId: args.userId,
         query: `SELECT
       customer_asset.resource_name,
       customer_asset.field_type,
@@ -356,7 +354,6 @@ async function queryCampaignLinks(args: z.infer<typeof ListAssetLinksSchema>) {
     const campaignFilter = args.campaignId ? ` AND campaign.id = ${normalizeNumericId(args.campaignId, "campaigns")}` : "";
     return runQuery({
         customerId: args.customerId,
-        userId: args.userId,
         query: `SELECT
       campaign_asset.resource_name,
       campaign_asset.field_type,
@@ -377,7 +374,6 @@ async function queryAdGroupLinks(args: z.infer<typeof ListAssetLinksSchema>) {
     const adGroupFilter = args.adGroupId ? ` AND ad_group.id = ${normalizeNumericId(args.adGroupId, "adGroups")}` : "";
     return runQuery({
         customerId: args.customerId,
-        userId: args.userId,
         query: `SELECT
       ad_group_asset.resource_name,
       ad_group_asset.field_type,
@@ -402,7 +398,6 @@ async function queryAssetGroupLinks(args: z.infer<typeof ListAssetLinksSchema>) 
         : "";
     return runQuery({
         customerId: args.customerId,
-        userId: args.userId,
         query: `SELECT
       asset_group_asset.resource_name,
       asset_group_asset.field_type,

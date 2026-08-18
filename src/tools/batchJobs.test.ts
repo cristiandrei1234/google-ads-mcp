@@ -53,7 +53,7 @@ describe("createBatchJob", () => {
 
   it("includes scrambling_id when scramblingId is provided", async () => {
     await createBatchJob({ customerId: "1", scramblingId: "abc", userId: "u" });
-    expect(getCustomer).toHaveBeenCalledWith("1", "u");
+    expect(getCustomer).toHaveBeenCalledWith("1");
     const [request] = customer.__mutateBatchJob.mock.calls[0];
     expect(request.operation.create.scrambling_id).toBe("abc");
   });
@@ -72,13 +72,13 @@ describe("listBatchJobs", () => {
     const q = customer.query.mock.calls[0][0];
     expect(q).toContain("FROM batch_job");
     expect(q).toContain("LIMIT 50");
-    expect(getCustomer).toHaveBeenCalledWith("1", undefined);
+    expect(getCustomer).toHaveBeenCalledWith("1");
   });
 
   it("honors a custom limit and userId", async () => {
     await listBatchJobs({ customerId: "1", limit: 7, userId: "u" });
     expect(customer.query.mock.calls[0][0]).toContain("LIMIT 7");
-    expect(getCustomer).toHaveBeenCalledWith("1", "u");
+    expect(getCustomer).toHaveBeenCalledWith("1");
   });
 });
 

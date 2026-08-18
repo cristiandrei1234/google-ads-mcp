@@ -4,12 +4,12 @@ import { describe, it, expect, beforeEach, vi } from "vitest";
 vi.mock("../services/google-ads/client.js", () => ({ getCustomer: vi.fn(), getClient: vi.fn() }));
 vi.mock("./runQuery.js", () => ({ runQuery: vi.fn() }));
 
-import { registerReadParityTools, READ_PARITY_EXPECTED_TOOL_NAMES } from "./readParity.js";
+import { registerResourceReadTools, RESOURCE_READ_TOOL_NAMES } from "./resourceReads.js";
 import { getCustomer } from "../services/google-ads/client.js";
 import { runQuery } from "./runQuery.js";
 import { captureTools, getTool, toolJson, fakeCustomer } from "../test/harness.js";
 
-const tools = captureTools(registerReadParityTools);
+const tools = captureTools(registerResourceReadTools);
 const call = (name: string, args: unknown) => getTool(tools, name).handler(args);
 const lastQuery = () => (runQuery as any).mock.calls.at(-1)[0].query as string;
 
@@ -19,10 +19,10 @@ beforeEach(() => {
   (runQuery as any).mockResolvedValue([]);
 });
 
-describe("readParity tools", () => {
+describe("resource read tools", () => {
   it("registers exactly the expected tool set", () => {
-    expect([...tools.keys()].sort()).toEqual([...READ_PARITY_EXPECTED_TOOL_NAMES].sort());
-    expect(tools.size).toBe(READ_PARITY_EXPECTED_TOOL_NAMES.length);
+    expect([...tools.keys()].sort()).toEqual([...RESOURCE_READ_TOOL_NAMES].sort());
+    expect(tools.size).toBe(RESOURCE_READ_TOOL_NAMES.length);
   });
 
   // ---- firstRowResult: found true and false ----------------------------------
@@ -352,7 +352,7 @@ describe("readParity tools", () => {
     (getCustomer as any).mockResolvedValue(customer);
 
     const res = await call("list_reach_plannable_products", { customerId: "9", locationId: "2840" });
-    expect(getCustomer).toHaveBeenCalledWith("9", undefined);
+    expect(getCustomer).toHaveBeenCalledWith("9");
     expect(listPlannableProducts).toHaveBeenCalledWith({ plannable_location_id: "2840" });
     expect(toolJson(res)).toEqual([{ plannable_product_code: "YOUTUBE" }]);
   });
@@ -370,9 +370,11 @@ describe("readParity tools", () => {
     expect((toolJson(res) as any).__error).toMatch(/boom/);
   });
 
-  it("passes userId through to runQuery", async () => {
-    await call("get_campaign", { customerId: "1", campaignId: "5", userId: "u-1" });
-    expect((runQuery as any).mock.calls.at(-1)[0].userId).toBe("u-1");
+  it("never forwards an identity to runQuery", async () => {
+    await call("get_campaign", { customerId: "1", campaignId: "5" });
+    const arg = (runQuery as any).mock.calls.at(-1)[0];
+    expect(arg.customerId).toBe("1");
+    expect(arg).not.toHaveProperty("userId");
   });
 
   // ---- additional reachable-path coverage -----------------------------------

@@ -52,7 +52,7 @@ describe("listExperiments", () => {
     const fake = makeFake();
     (getCustomer as any).mockResolvedValue(fake);
     const rows = await listExperiments({ customerId: "123", limit: 7, userId: "u1" } as any);
-    expect(getCustomer).toHaveBeenCalledWith("123", "u1");
+    expect(getCustomer).toHaveBeenCalledWith("123");
     const query = fake.query.mock.calls[0][0] as string;
     expect(query).toContain("FROM experiment");
     expect(query).toContain("LIMIT 7");
@@ -64,7 +64,7 @@ describe("listExperiments", () => {
     const fake = makeFake();
     (getCustomer as any).mockResolvedValue(fake);
     await listExperiments({ customerId: "123", limit: 50 } as any);
-    expect(getCustomer).toHaveBeenCalledWith("123", undefined);
+    expect(getCustomer).toHaveBeenCalledWith("123");
   });
 });
 

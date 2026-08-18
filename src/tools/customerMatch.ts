@@ -90,7 +90,7 @@ const AddCustomerMatchMembersSchema = BaseSchema.extend({
 });
 async function addCustomerMatchMembers(args: z.infer<typeof AddCustomerMatchMembersSchema>) {
     assertResourceBelongsToCustomer(args.resourceName, args.customerId);
-    const customer = await getCustomer(args.customerId, args.userId);
+    const customer = await getCustomer(args.customerId);
     return (customer as any).offlineUserDataJobs.addOfflineUserDataJobOperations({
         resource_name: args.resourceName,
         operations: buildOfflineUserDataJobOperations(args.members, "create"),
@@ -106,7 +106,7 @@ const RemoveCustomerMatchMembersSchema = BaseSchema.extend({
 });
 async function removeCustomerMatchMembers(args: z.infer<typeof RemoveCustomerMatchMembersSchema>) {
     assertResourceBelongsToCustomer(args.resourceName, args.customerId);
-    const customer = await getCustomer(args.customerId, args.userId);
+    const customer = await getCustomer(args.customerId);
     return (customer as any).offlineUserDataJobs.addOfflineUserDataJobOperations({
         resource_name: args.resourceName,
         operations: buildOfflineUserDataJobOperations(args.members, "remove"),
@@ -122,7 +122,7 @@ const CreateCustomerMatchJobWithMembersSchema = BaseSchema.extend({
     enableWarnings: z.boolean().default(true),
 });
 async function createCustomerMatchJobWithMembers(args: z.infer<typeof CreateCustomerMatchJobWithMembersSchema>) {
-    const customer = await getCustomer(args.customerId, args.userId);
+    const customer = await getCustomer(args.customerId);
     const normalizedCustomerId = normalizeCustomerId(args.customerId);
     const userListResourceName = toUserListResourceName(args.customerId, args.userListId);
     const createResponse = await (customer as any).offlineUserDataJobs.createOfflineUserDataJob({
@@ -163,7 +163,6 @@ const ListCustomerMatchJobsSchema = BaseSchema.extend({
 async function listCustomerMatchJobs(args: z.infer<typeof ListCustomerMatchJobsSchema>) {
     return runQuery({
         customerId: args.customerId,
-        userId: args.userId,
         query: `SELECT
       offline_user_data_job.resource_name,
       offline_user_data_job.id,

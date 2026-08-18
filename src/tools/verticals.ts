@@ -15,12 +15,11 @@ const AudienceInsightsSchema = z.object({
     .default(["AFFINITY_USER_INTEREST"])
     .describe("Audience insights dimensions."),
   queryText: z.string().optional().describe("Optional query text filter."),
-  userId: z.string().optional().describe("SaaS User ID"),
 });
 
 export const ListAudienceInsightsToolSchema = AudienceInsightsSchema;
 export async function listAudienceInsights(args: z.infer<typeof AudienceInsightsSchema>) {
-  const customer = await getCustomer(args.customerId, args.userId);
+  const customer = await getCustomer(args.customerId);
   
   try {
     const request: Record<string, unknown> = {
@@ -53,12 +52,11 @@ const ListHotelPerformanceSchema = z.object({
   where: z.string().optional().describe("Optional GAQL filter expression without WHERE."),
   orderBy: z.string().optional().describe("Optional GAQL ORDER BY expression without ORDER BY."),
   limit: z.number().int().min(1).max(5000).default(50),
-  userId: z.string().optional().describe("SaaS User ID"),
 });
 
 export const ListHotelPerformanceToolSchema = ListHotelPerformanceSchema;
 export async function listHotelPerformance(args: z.infer<typeof ListHotelPerformanceSchema>) {
-  const customer = await getCustomer(args.customerId, args.userId);
+  const customer = await getCustomer(args.customerId);
 
   assertSafeGaqlFragment(args.where, "where");
   assertSafeGaqlFragment(args.orderBy, "orderBy");

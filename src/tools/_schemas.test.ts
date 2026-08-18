@@ -3,12 +3,12 @@ import { BaseSchema, LimitedListSchema, chunk } from "./_schemas.js";
 
 describe("_schemas", () => {
   describe("BaseSchema", () => {
-    it("accepts a customerId and optional userId", () => {
-      expect(BaseSchema.parse({ customerId: "1", userId: "u" })).toEqual({ customerId: "1", userId: "u" });
+    it("accepts a customerId", () => {
+      expect(BaseSchema.parse({ customerId: "1" })).toEqual({ customerId: "1" });
     });
 
-    it("makes userId optional", () => {
-      expect(BaseSchema.parse({ customerId: "1" })).toEqual({ customerId: "1" });
+    it("drops a caller-supplied userId instead of trusting it", () => {
+      expect(BaseSchema.parse({ customerId: "1", userId: "u" })).toEqual({ customerId: "1" });
     });
 
     it("rejects a missing customerId", () => {

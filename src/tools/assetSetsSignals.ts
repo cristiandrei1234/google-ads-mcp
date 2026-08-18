@@ -71,7 +71,6 @@ async function listAssetSets(args: z.infer<typeof ListAssetSetsSchema>) {
 
   return runQuery({
     customerId: args.customerId,
-    userId: args.userId,
     query: `SELECT
       asset_set.resource_name,
       asset_set.id,
@@ -93,7 +92,7 @@ const CreateAssetSetSchema = BaseSchema.extend({
 });
 
 async function createAssetSet(args: z.infer<typeof CreateAssetSetSchema>) {
-  const customer = await getCustomer(args.customerId, args.userId);
+  const customer = await getCustomer(args.customerId);
 
   return runMutation(customer, [
     {
@@ -115,7 +114,7 @@ const UpdateAssetSetSchema = BaseSchema.extend({
 });
 
 async function updateAssetSet(args: z.infer<typeof UpdateAssetSetSchema>) {
-  const customer = await getCustomer(args.customerId, args.userId);
+  const customer = await getCustomer(args.customerId);
 
   const update: Record<string, unknown> = {
     resource_name: toAssetSetResourceName(args.customerId, args.assetSetId),
@@ -150,7 +149,7 @@ const RemoveAssetSetSchema = BaseSchema.extend({
 });
 
 async function removeAssetSet(args: z.infer<typeof RemoveAssetSetSchema>) {
-  const customer = await getCustomer(args.customerId, args.userId);
+  const customer = await getCustomer(args.customerId);
 
   return runMutation(customer, [
     {
@@ -173,7 +172,6 @@ async function listAssetSetAssets(args: z.infer<typeof ListAssetSetAssetsSchema>
 
   return runQuery({
     customerId: args.customerId,
-    userId: args.userId,
     query: `SELECT
       asset_set_asset.resource_name,
       asset_set_asset.asset_set,
@@ -198,7 +196,7 @@ const LinkAssetSetAssetSchema = BaseSchema.extend({
 });
 
 async function linkAssetSetAsset(args: z.infer<typeof LinkAssetSetAssetSchema>) {
-  const customer = await getCustomer(args.customerId, args.userId);
+  const customer = await getCustomer(args.customerId);
 
   return runMutation(customer, [
     {
@@ -222,7 +220,7 @@ const UnlinkAssetSetAssetSchema = BaseSchema.extend({
 });
 
 async function unlinkAssetSetAsset(args: z.infer<typeof UnlinkAssetSetAssetSchema>) {
-  const customer = await getCustomer(args.customerId, args.userId);
+  const customer = await getCustomer(args.customerId);
   const resourceName =
     args.resourceName || toAssetSetAssetResourceName(args.customerId, args.assetSetId!, args.assetId!);
 
@@ -247,7 +245,6 @@ async function listCampaignAssetSets(args: z.infer<typeof ListCampaignAssetSetsS
 
   return runQuery({
     customerId: args.customerId,
-    userId: args.userId,
     query: `SELECT
       campaign_asset_set.resource_name,
       campaign_asset_set.campaign,
@@ -272,7 +269,7 @@ const LinkCampaignAssetSetSchema = BaseSchema.extend({
 });
 
 async function linkCampaignAssetSet(args: z.infer<typeof LinkCampaignAssetSetSchema>) {
-  const customer = await getCustomer(args.customerId, args.userId);
+  const customer = await getCustomer(args.customerId);
 
   return runMutation(customer, [
     {
@@ -296,7 +293,7 @@ const UnlinkCampaignAssetSetSchema = BaseSchema.extend({
 });
 
 async function unlinkCampaignAssetSet(args: z.infer<typeof UnlinkCampaignAssetSetSchema>) {
-  const customer = await getCustomer(args.customerId, args.userId);
+  const customer = await getCustomer(args.customerId);
   const resourceName =
     args.resourceName ||
     toCampaignAssetSetResourceName(args.customerId, args.campaignId!, args.assetSetId!);
@@ -322,7 +319,6 @@ async function listAssetGroupSignals(args: z.infer<typeof ListAssetGroupSignalsS
 
   return runQuery({
     customerId: args.customerId,
-    userId: args.userId,
     query: `SELECT
       asset_group_signal.resource_name,
       asset_group_signal.asset_group,
@@ -350,7 +346,7 @@ const CreateAssetGroupSignalSchema = BaseSchema.extend({
 });
 
 async function createAssetGroupSignal(args: z.infer<typeof CreateAssetGroupSignalSchema>) {
-  const customer = await getCustomer(args.customerId, args.userId);
+  const customer = await getCustomer(args.customerId);
   const create: Record<string, unknown> = {
     asset_group: toAssetGroupResourceName(args.customerId, args.assetGroupId),
   };
@@ -385,7 +381,7 @@ const UpdateAssetGroupSignalSchema = BaseSchema.extend({
 });
 
 async function updateAssetGroupSignal(args: z.infer<typeof UpdateAssetGroupSignalSchema>) {
-  const customer = await getCustomer(args.customerId, args.userId);
+  const customer = await getCustomer(args.customerId);
 
   const update: Record<string, unknown> = {
     resource_name: args.resourceName,
@@ -421,7 +417,7 @@ const RemoveAssetGroupSignalSchema = BaseSchema.extend({
 });
 
 async function removeAssetGroupSignal(args: z.infer<typeof RemoveAssetGroupSignalSchema>) {
-  const customer = await getCustomer(args.customerId, args.userId);
+  const customer = await getCustomer(args.customerId);
 
   return runMutation(customer, [
     {

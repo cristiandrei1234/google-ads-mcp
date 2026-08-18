@@ -24,7 +24,7 @@ beforeEach(() => {
 describe("createTextAsset", () => {
   it("builds a TEXT asset create operation with name", async () => {
     await createTextAsset({ customerId: "1", text: "Hello", name: "MyAsset", userId: "u1" });
-    expect(getCustomer).toHaveBeenCalledWith("1", "u1");
+    expect(getCustomer).toHaveBeenCalledWith("1");
     const op = (runMutation as any).mock.calls[0][1][0];
     expect(op.asset_operation.create).toMatchObject({
       type: "TEXT",

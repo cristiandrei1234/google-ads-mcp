@@ -35,7 +35,7 @@ describe("generateKeywordIdeas", () => {
     } as any);
 
     expect(result).toEqual({ results: ["idea"] });
-    expect(getCustomer).toHaveBeenCalledWith("123", undefined);
+    expect(getCustomer).toHaveBeenCalledWith("123");
     const req = c.keywordPlanIdeas.generateKeywordIdeas.mock.calls[0][0];
     expect(req).toMatchObject({
       customer_id: "123",
@@ -63,7 +63,7 @@ describe("generateKeywordIdeas", () => {
       userId: "u1",
     } as any);
 
-    expect(getCustomer).toHaveBeenCalledWith("123", "u1");
+    expect(getCustomer).toHaveBeenCalledWith("123");
     const req = c.keywordPlanIdeas.generateKeywordIdeas.mock.calls[0][0];
     expect(req.geo_target_constants).toEqual(["geoTargetConstants/2840"]);
     expect(req.include_adult_keywords).toBe(true);

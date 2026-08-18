@@ -7,12 +7,11 @@ import logger from "../observability/logger.js";
 const AdGroupStatusSchema = z.object({
   customerId: z.string().describe("The Google Ads Customer ID"),
   adGroupId: z.string().describe("The ID of the ad group to modify"),
-  userId: z.string().optional().describe("SaaS User ID"),
 });
 
 // Helper to update ad group status
-async function updateAdGroupStatus(customerId: string, adGroupId: string, status: string, userId?: string) {
-  const customer = await getCustomer(customerId, userId);
+async function updateAdGroupStatus(customerId: string, adGroupId: string, status: string) {
+  const customer = await getCustomer(customerId);
   const resourceName = `customers/${customerId}/adGroups/${adGroupId}`;
   
   const operation = {
@@ -32,17 +31,17 @@ async function updateAdGroupStatus(customerId: string, adGroupId: string, status
 
 export const PauseAdGroupSchema = AdGroupStatusSchema;
 export async function pauseAdGroup(args: z.infer<typeof PauseAdGroupSchema>) {
-  return updateAdGroupStatus(args.customerId, args.adGroupId, "PAUSED", args.userId);
+  return updateAdGroupStatus(args.customerId, args.adGroupId, "PAUSED");
 }
 
 export const EnableAdGroupSchema = AdGroupStatusSchema;
 export async function enableAdGroup(args: z.infer<typeof EnableAdGroupSchema>) {
-  return updateAdGroupStatus(args.customerId, args.adGroupId, "ENABLED", args.userId);
+  return updateAdGroupStatus(args.customerId, args.adGroupId, "ENABLED");
 }
 
 export const RemoveAdGroupSchema = AdGroupStatusSchema;
 export async function removeAdGroup(args: z.infer<typeof RemoveAdGroupSchema>) {
-  const customer = await getCustomer(args.customerId, args.userId);
+  const customer = await getCustomer(args.customerId);
   const resourceName = `customers/${args.customerId}/adGroups/${args.adGroupId}`;
 
   const operation = {

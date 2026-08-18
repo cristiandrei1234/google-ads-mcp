@@ -29,7 +29,6 @@ async function getCampaign(args: z.infer<typeof GetCampaignSchema>) {
   const escaped = escapeGaqlString(resourceName);
   const rows = await runQuery({
     customerId: args.customerId,
-    userId: args.userId,
     query: `SELECT
       campaign.resource_name,
       campaign.id,
@@ -55,7 +54,6 @@ async function listCampaignBudgets(args: z.infer<typeof ListCampaignBudgetsSchem
   const where = args.status ? `WHERE campaign_budget.status = ${args.status}` : "";
   return runQuery({
     customerId: args.customerId,
-    userId: args.userId,
     query: `SELECT
       campaign_budget.resource_name,
       campaign_budget.id,
@@ -81,7 +79,6 @@ async function getCampaignBudget(args: z.infer<typeof GetCampaignBudgetSchema>) 
   const escaped = escapeGaqlString(resourceName);
   const rows = await runQuery({
     customerId: args.customerId,
-    userId: args.userId,
     query: `SELECT
       campaign_budget.resource_name,
       campaign_budget.id,
@@ -107,7 +104,6 @@ async function getAdGroup(args: z.infer<typeof GetAdGroupSchema>) {
   const escaped = escapeGaqlString(resourceName);
   const rows = await runQuery({
     customerId: args.customerId,
-    userId: args.userId,
     query: `SELECT
       ad_group.resource_name,
       ad_group.id,
@@ -149,7 +145,6 @@ async function getKeyword(args: z.infer<typeof GetKeywordSchema>) {
   }
   const rows = await runQuery({
     customerId: args.customerId,
-    userId: args.userId,
     query: `SELECT
       ad_group_criterion.resource_name,
       ad_group_criterion.criterion_id,
@@ -194,7 +189,6 @@ async function getAd(args: z.infer<typeof GetAdSchema>) {
   }
   const rows = await runQuery({
     customerId: args.customerId,
-    userId: args.userId,
     query: `SELECT
       ad_group_ad.resource_name,
       ad_group_ad.status,
@@ -225,7 +219,6 @@ async function getAsset(args: z.infer<typeof GetAssetSchema>) {
   const escaped = escapeGaqlString(resourceName);
   const rows = await runQuery({
     customerId: args.customerId,
-    userId: args.userId,
     query: `SELECT
       asset.resource_name,
       asset.id,
@@ -249,7 +242,6 @@ async function getAssetGroup(args: z.infer<typeof GetAssetGroupSchema>) {
   const escaped = escapeGaqlString(resourceName);
   const rows = await runQuery({
     customerId: args.customerId,
-    userId: args.userId,
     query: `SELECT
       asset_group.resource_name,
       asset_group.id,
@@ -278,7 +270,6 @@ async function listCampaignNegativeKeywords(args: z.infer<typeof ListCampaignNeg
   }
   return runQuery({
     customerId: args.customerId,
-    userId: args.userId,
     query: `SELECT
       campaign_criterion.resource_name,
       campaign_criterion.criterion_id,
@@ -319,7 +310,6 @@ async function getCampaignNegativeKeyword(args: z.infer<typeof GetCampaignNegati
   }
   const rows = await runQuery({
     customerId: args.customerId,
-    userId: args.userId,
     query: `SELECT
       campaign_criterion.resource_name,
       campaign_criterion.criterion_id,
@@ -347,7 +337,6 @@ async function listAdGroupNegativeKeywords(args: z.infer<typeof ListAdGroupNegat
   }
   return runQuery({
     customerId: args.customerId,
-    userId: args.userId,
     query: `SELECT
       ad_group_criterion.resource_name,
       ad_group_criterion.criterion_id,
@@ -390,7 +379,6 @@ async function getAdGroupNegativeKeyword(args: z.infer<typeof GetAdGroupNegative
   }
   const rows = await runQuery({
     customerId: args.customerId,
-    userId: args.userId,
     query: `SELECT
       ad_group_criterion.resource_name,
       ad_group_criterion.criterion_id,
@@ -417,7 +405,6 @@ async function getSharedNegativeKeywordList(args: z.infer<typeof GetSharedNegati
   const escaped = escapeGaqlString(resourceName);
   const rows = await runQuery({
     customerId: args.customerId,
-    userId: args.userId,
     query: `SELECT
       shared_set.resource_name,
       shared_set.id,
@@ -441,7 +428,6 @@ async function getConversionAction(args: z.infer<typeof GetConversionActionSchem
   const escaped = escapeGaqlString(resourceName);
   const rows = await runQuery({
     customerId: args.customerId,
-    userId: args.userId,
     query: `SELECT
       conversion_action.resource_name,
       conversion_action.id,
@@ -477,7 +463,6 @@ async function getCustomerConversionGoal(args: z.infer<typeof GetCustomerConvers
   const escaped = escapeGaqlString(resourceName);
   const rows = await runQuery({
     customerId: args.customerId,
-    userId: args.userId,
     query: `SELECT
       customer_conversion_goal.resource_name,
       customer_conversion_goal.category,
@@ -518,7 +503,6 @@ async function getCampaignConversionGoal(args: z.infer<typeof GetCampaignConvers
   const escaped = escapeGaqlString(resourceName);
   const rows = await runQuery({
     customerId: args.customerId,
-    userId: args.userId,
     query: `SELECT
       campaign_conversion_goal.resource_name,
       campaign_conversion_goal.campaign,
@@ -543,7 +527,6 @@ async function getUserList(args: z.infer<typeof GetUserListSchema>) {
   const escaped = escapeGaqlString(resourceName);
   const rows = await runQuery({
     customerId: args.customerId,
-    userId: args.userId,
     query: `SELECT
       user_list.resource_name,
       user_list.id,
@@ -569,7 +552,6 @@ async function getCustomAudience(args: z.infer<typeof GetCustomAudienceSchema>) 
   const escaped = escapeGaqlString(resourceName);
   const rows = await runQuery({
     customerId: args.customerId,
-    userId: args.userId,
     query: `SELECT
       custom_audience.resource_name,
       custom_audience.id,
@@ -593,7 +575,6 @@ async function getCombinedAudience(args: z.infer<typeof GetCombinedAudienceSchem
   const escaped = escapeGaqlString(resourceName);
   const rows = await runQuery({
     customerId: args.customerId,
-    userId: args.userId,
     query: `SELECT
       combined_audience.resource_name,
       combined_audience.id,
@@ -621,7 +602,6 @@ async function listCampaignAudienceTargeting(args: z.infer<typeof ListCampaignAu
   }
   return runQuery({
     customerId: args.customerId,
-    userId: args.userId,
     query: `SELECT
       campaign_criterion.resource_name,
       campaign_criterion.criterion_id,
@@ -650,7 +630,6 @@ async function listAdGroupAudienceTargeting(args: z.infer<typeof ListAdGroupAudi
   }
   return runQuery({
     customerId: args.customerId,
-    userId: args.userId,
     query: `SELECT
       ad_group_criterion.resource_name,
       ad_group_criterion.criterion_id,
@@ -676,7 +655,6 @@ async function getCampaignDraft(args: z.infer<typeof GetCampaignDraftSchema>) {
   const escaped = escapeGaqlString(resourceName);
   const rows = await runQuery({
     customerId: args.customerId,
-    userId: args.userId,
     query: `SELECT
       campaign_draft.resource_name,
       campaign_draft.draft_id,
@@ -702,7 +680,6 @@ async function getBiddingStrategy(args: z.infer<typeof GetBiddingStrategySchema>
   const escaped = escapeGaqlString(resourceName);
   const rows = await runQuery({
     customerId: args.customerId,
-    userId: args.userId,
     query: `SELECT
       bidding_strategy.resource_name,
       bidding_strategy.id,
@@ -732,7 +709,6 @@ async function getBiddingSeasonalityAdjustment(args: z.infer<typeof GetBiddingSe
   const escaped = escapeGaqlString(resourceName);
   const rows = await runQuery({
     customerId: args.customerId,
-    userId: args.userId,
     query: `SELECT
       bidding_seasonality_adjustment.resource_name,
       bidding_seasonality_adjustment.seasonality_adjustment_id,
@@ -758,7 +734,6 @@ async function getBiddingDataExclusion(args: z.infer<typeof GetBiddingDataExclus
   const escaped = escapeGaqlString(resourceName);
   const rows = await runQuery({
     customerId: args.customerId,
-    userId: args.userId,
     query: `SELECT
       bidding_data_exclusion.resource_name,
       bidding_data_exclusion.data_exclusion_id,
@@ -783,7 +758,6 @@ async function getAssetSet(args: z.infer<typeof GetAssetSetSchema>) {
   const escaped = escapeGaqlString(resourceName);
   const rows = await runQuery({
     customerId: args.customerId,
-    userId: args.userId,
     query: `SELECT
       asset_set.resource_name,
       asset_set.id,
@@ -820,7 +794,6 @@ async function getAssetSetAsset(args: z.infer<typeof GetAssetSetAssetSchema>) {
   const escaped = escapeGaqlString(resourceName);
   const rows = await runQuery({
     customerId: args.customerId,
-    userId: args.userId,
     query: `SELECT
       asset_set_asset.resource_name,
       asset_set_asset.asset_set,
@@ -857,7 +830,6 @@ async function getCampaignAssetSet(args: z.infer<typeof GetCampaignAssetSetSchem
   const escaped = escapeGaqlString(resourceName);
   const rows = await runQuery({
     customerId: args.customerId,
-    userId: args.userId,
     query: `SELECT
       campaign_asset_set.resource_name,
       campaign_asset_set.campaign,
@@ -878,7 +850,6 @@ async function getAssetGroupSignal(args: z.infer<typeof GetAssetGroupSignalSchem
   const escaped = escapeGaqlString(args.resourceName);
   const rows = await runQuery({
     customerId: args.customerId,
-    userId: args.userId,
     query: `SELECT
       asset_group_signal.resource_name,
       asset_group_signal.asset_group,
@@ -904,7 +875,6 @@ async function getExperiment(args: z.infer<typeof GetExperimentSchema>) {
   const escaped = escapeGaqlString(resourceName);
   const rows = await runQuery({
     customerId: args.customerId,
-    userId: args.userId,
     query: `SELECT
       experiment.resource_name,
       experiment.experiment_id,
@@ -926,14 +896,14 @@ const ListReachPlannableProductsSchema = BaseSchema.extend({
 });
 
 async function listReachPlannableProducts(args: z.infer<typeof ListReachPlannableProductsSchema>) {
-  const customer = await getCustomer(args.customerId, args.userId);
+  const customer = await getCustomer(args.customerId);
   return (customer as any).reachPlans.listPlannableProducts({
     plannable_location_id: args.locationId,
   });
 }
 
 
-export const READ_PARITY_EXPECTED_TOOL_NAMES: string[] = [
+export const RESOURCE_READ_TOOL_NAMES: string[] = [
   "get_campaign",
   "list_campaign_budgets",
   "get_campaign_budget",
@@ -967,7 +937,7 @@ export const READ_PARITY_EXPECTED_TOOL_NAMES: string[] = [
   "list_reach_plannable_products",
 ];
 
-export function registerReadParityTools(server: McpServer) {
+export function registerResourceReadTools(server: McpServer) {
   server.registerTool("get_campaign", { description: "Get one campaign.", inputSchema: GetCampaignSchema.shape }, args =>
     asTool(getCampaign, args)
   );

@@ -40,8 +40,8 @@ import { registerConversionGoalTools } from "./tools/conversionGoals.js";
 import { registerAudiencesAdvancedTools } from "./tools/audiencesAdvanced.js";
 import { registerAssetSetsSignalsTools } from "./tools/assetSetsSignals.js";
 import { registerVerticalTools } from "./tools/verticals.js";
-import { registerMutateCoverageV23Tools } from "./tools/mutateCoverageV23.js";
-import { registerReadParityTools } from "./tools/readParity.js";
+import { registerResourceMutationTools } from "./tools/resourceMutations.js";
+import { registerResourceReadTools } from "./tools/resourceReads.js";
 import { z } from "zod";
 import { can, isWriteTool } from "./policies/rbac.js";
 import {
@@ -50,9 +50,10 @@ import {
     CONFIRM_FIELD,
 } from "./policies/destructive.js";
 import { getIdentity } from "./auth/identityContext.js";
-import { hasDatabase } from "./config/env.js";
+import config, { hasDatabase } from "./config/env.js";
+import { resolveToolsets, TOOLSETS, type Toolset } from "./policies/toolsets.js";
 import { toErrorMessage } from "./observability/errorMessage.js";
-import { asTool } from "./tools/_runtime.js";
+import { asTool, maxResultChars } from "./tools/_runtime.js";
 import logger from "./observability/logger.js";
 import { recordToolInvocation } from "./observability/metrics.js";
 import { withToolSpan } from "./observability/tracing.js";
@@ -88,7 +89,6 @@ function audit(
             appendAuditLog({
                 organizationId: orgId,
                 memberId,
-                userId,
                 tool: toolName,
                 customerId: customerId ?? null,
                 outcome,
@@ -112,8 +112,9 @@ function withRbac(toolName: string, handler: RegisteredToolHandler): RegisteredT
             recordToolInvocation(toolName, outcome, (Date.now() - startedAt) / 1000);
         };
         const identity = getIdentity();
-        // Strip any caller-supplied userId: identity comes from the authenticated
-        // session, never from arguments (prevents tenant impersonation).
+        // Belt and braces: no schema advertises `userId` any more (so the SDK
+        // strips it before we ever see it), but identity must never be readable
+        // from arguments, and a future tool could register a passthrough schema.
         if (toolArgs[0] && typeof toolArgs[0] === "object") {
             delete (toolArgs[0] as Record<string, unknown>).userId;
         }
@@ -188,6 +189,7 @@ function withRbac(toolName: string, handler: RegisteredToolHandler): RegisteredT
  * their own `register*Tools` modules — see the calls at the end of the builder.)
  */
 type SimpleToolEntry = readonly [
+    toolset: Toolset,
     name: string,
     description: string,
     schema: { shape: z.ZodRawShape },
@@ -195,87 +197,141 @@ type SimpleToolEntry = readonly [
 ];
 
 const SIMPLE_TOOLS: readonly SimpleToolEntry[] = [
-    ["list_accessible_accounts", "List all Google Ads accounts accessible with the current credentials.", ListAccountsSchema, listAccounts],
-    ["run_gaql_query", "Run a Google Ads Query Language (GAQL) query against a specific customer ID.", RunQuerySchema, runQuery],
+    ["core", "list_accessible_accounts", "List the Google Ads accounts (customer IDs) these credentials can reach, including client accounts under a manager (MCC).", ListAccountsSchema, listAccounts],
+    ["core", "run_gaql_query", "Run a read-only GAQL query against one account: performance metrics, spend, and entity settings — anything the Google Ads UI reports. A LIMIT is added when the query has none.", RunQuerySchema, runQuery],
     // SaaS Admin
-    ["get_user_status", "Get the status of a SaaS user (linked accounts, connection status).", GetUserStatusToolSchema, getUserStatus],
+    ["admin", "get_user_status", "Report a user's organizations, linked Google Ads connections (MCCs) and per-account grants. Multi-tenant mode only.", GetUserStatusToolSchema, getUserStatus],
     // Campaign management
-    ["pause_campaign", "Pause a campaign by ID.", PauseCampaignSchema, pauseCampaign],
-    ["enable_campaign", "Enable a campaign by ID.", EnableCampaignSchema, enableCampaign],
-    ["remove_campaign", "Remove (delete) a campaign by ID.", RemoveCampaignSchema, removeCampaign],
+    ["core", "pause_campaign", "Pause a campaign so it stops serving and spending. Reversible with enable_campaign.", PauseCampaignSchema, pauseCampaign],
+    ["core", "enable_campaign", "Resume a paused campaign so it serves and spends again.", EnableCampaignSchema, enableCampaign],
+    ["core", "remove_campaign", "Permanently remove a campaign. Irreversible — pause_campaign is the reversible option.", RemoveCampaignSchema, removeCampaign],
     // Ad Group management
-    ["pause_ad_group", "Pause an ad group by ID.", PauseAdGroupSchema, pauseAdGroup],
-    ["enable_ad_group", "Enable an ad group by ID.", EnableAdGroupSchema, enableAdGroup],
-    ["remove_ad_group", "Remove (delete) an ad group by ID.", RemoveAdGroupSchema, removeAdGroup],
+    ["core", "pause_ad_group", "Pause an ad group so its ads and keywords stop serving.", PauseAdGroupSchema, pauseAdGroup],
+    ["core", "enable_ad_group", "Resume a paused ad group.", EnableAdGroupSchema, enableAdGroup],
+    ["core", "remove_ad_group", "Permanently remove an ad group. Irreversible — pause_ad_group is the reversible option.", RemoveAdGroupSchema, removeAdGroup],
     // Keyword management
-    ["add_keyword", "Add a keyword to an ad group.", AddKeywordToolSchema, addKeyword],
-    ["pause_keyword", "Pause a keyword by ID.", PauseKeywordSchema, pauseKeyword],
-    ["enable_keyword", "Enable a keyword by ID.", EnableKeywordSchema, enableKeyword],
-    ["remove_keyword", "Remove (delete) a keyword by ID.", RemoveKeywordSchema, removeKeyword],
+    ["core", "add_keyword", "Add a positive keyword to an ad group with a match type (EXACT, PHRASE or BROAD) and an optional CPC bid.", AddKeywordToolSchema, addKeyword],
+    ["core", "pause_keyword", "Pause a keyword so it stops triggering ads and spending.", PauseKeywordSchema, pauseKeyword],
+    ["core", "enable_keyword", "Resume a paused keyword.", EnableKeywordSchema, enableKeyword],
+    ["core", "remove_keyword", "Permanently remove a keyword from its ad group. Irreversible.", RemoveKeywordSchema, removeKeyword],
     // Negative Keyword management
-    ["add_ad_group_negative_keyword", "Add a negative keyword to an ad group.", AddAdGroupNegativeKeywordToolSchema, addAdGroupNegativeKeyword],
-    ["remove_ad_group_negative_keyword", "Remove a negative keyword from an ad group.", RemoveAdGroupNegativeKeywordToolSchema, removeAdGroupNegativeKeyword],
-    ["add_campaign_negative_keyword", "Add a negative keyword to a campaign.", AddCampaignNegativeKeywordToolSchema, addCampaignNegativeKeyword],
-    ["remove_campaign_negative_keyword", "Remove a negative keyword from a campaign.", RemoveCampaignNegativeKeywordToolSchema, removeCampaignNegativeKeyword],
+    ["negatives", "add_ad_group_negative_keyword", "Block a search term at ad group level by adding a negative keyword.", AddAdGroupNegativeKeywordToolSchema, addAdGroupNegativeKeyword],
+    ["negatives", "remove_ad_group_negative_keyword", "Remove an ad group negative keyword so its search terms can trigger ads again.", RemoveAdGroupNegativeKeywordToolSchema, removeAdGroupNegativeKeyword],
+    ["negatives", "add_campaign_negative_keyword", "Block a search term across a whole campaign by adding a campaign negative keyword.", AddCampaignNegativeKeywordToolSchema, addCampaignNegativeKeyword],
+    ["negatives", "remove_campaign_negative_keyword", "Remove a campaign negative keyword so its search terms can trigger ads again.", RemoveCampaignNegativeKeywordToolSchema, removeCampaignNegativeKeyword],
     // Merchant Center
-    ["list_products", "List products from Merchant Center.", ListProductsSchema, listProducts],
-    ["get_product", "Get a specific product from Merchant Center.", GetProductSchema, getProduct],
-    ["insert_product", "Insert or update a product in Merchant Center.", InsertProductSchema, insertProduct],
-    ["delete_product", "Delete a product from Merchant Center.", DeleteProductSchema, deleteProduct],
-    ["link_merchant_center", "Link a Merchant Center account to a Google Ads account.", LinkMerchantCenterToolSchema, linkMerchantCenter],
-    ["list_merchant_center_links", "List linked Merchant Center accounts.", ListMerchantCenterLinksToolSchema, listMerchantCenterLinks],
-    ["unlink_merchant_center", "Unlink a Merchant Center account from a Google Ads account.", UnlinkMerchantCenterToolSchema, unlinkMerchantCenter],
+    ["shopping", "list_products", "List products in a Merchant Center feed with their offer IDs, titles and availability.", ListProductsSchema, listProducts],
+    ["shopping", "get_product", "Read one Merchant Center product by product ID, including attributes and disapprovals.", GetProductSchema, getProduct],
+    ["shopping", "insert_product", "Create or overwrite a product in a Merchant Center feed.", InsertProductSchema, insertProduct],
+    ["shopping", "delete_product", "Delete a product from a Merchant Center feed. Irreversible.", DeleteProductSchema, deleteProduct],
+    ["shopping", "link_merchant_center", "Link a Merchant Center account to a Google Ads account so Shopping and Performance Max campaigns can use its products.", LinkMerchantCenterToolSchema, linkMerchantCenter],
+    ["shopping", "list_merchant_center_links", "List the Merchant Center accounts linked to a Google Ads account, with the status of each link.", ListMerchantCenterLinksToolSchema, listMerchantCenterLinks],
+    ["shopping", "unlink_merchant_center", "Unlink a Merchant Center account from a Google Ads account. Shopping campaigns stop serving those products.", UnlinkMerchantCenterToolSchema, unlinkMerchantCenter],
     // Audiences
-    ["create_user_list", "Create a user list (audience).", CreateUserListToolSchema, createUserList],
-    ["list_user_lists", "List user lists (audiences).", ListUserListsToolSchema, listUserLists],
+    ["audiences", "create_user_list", "Create a remarketing audience (user list) for targeting or exclusion.", CreateUserListToolSchema, createUserList],
+    ["audiences", "list_user_lists", "List remarketing audiences (user lists) with their size and membership rules.", ListUserListsToolSchema, listUserLists],
     // Conversions
-    ["create_conversion_action", "Create a conversion action.", CreateConversionActionToolSchema, createConversionAction],
-    ["list_conversion_actions", "List conversion actions.", ListConversionActionsToolSchema, listConversionActions],
-    ["upload_click_conversion", "Upload an offline click conversion.", UploadClickConversionToolSchema, uploadClickConversion],
+    ["conversions", "create_conversion_action", "Create a conversion action to track (purchase, lead, sign-up) with its counting, attribution and value settings.", CreateConversionActionToolSchema, createConversionAction],
+    ["conversions", "list_conversion_actions", "List conversion actions with their category, status, counting type and attribution model.", ListConversionActionsToolSchema, listConversionActions],
+    ["conversions", "upload_click_conversion", "Upload an offline conversion against a stored GCLID so conversions that happened off-site are attributed and can train Smart Bidding.", UploadClickConversionToolSchema, uploadClickConversion],
     // Keyword Planner
-    ["generate_keyword_ideas", "Generate keyword ideas.", GenerateKeywordIdeasToolSchema, generateKeywordIdeas],
+    ["planning", "generate_keyword_ideas", "Generate keyword ideas from seed terms or a landing page URL, with Keyword Planner search volume and competition.", GenerateKeywordIdeasToolSchema, generateKeywordIdeas],
     // Recommendations
-    ["list_recommendations", "List active recommendations.", ListRecommendationsToolSchema, listRecommendations],
-    ["apply_recommendation", "Apply a recommendation.", ApplyRecommendationToolSchema, applyRecommendation],
-    ["dismiss_recommendation", "Dismiss a recommendation.", DismissRecommendationToolSchema, dismissRecommendation],
+    ["reporting", "list_recommendations", "List Google's active optimization recommendations for an account: budget, bidding, keyword and ad suggestions.", ListRecommendationsToolSchema, listRecommendations],
+    ["reporting", "apply_recommendation", "Apply one of Google's optimization recommendations. Changes the account immediately.", ApplyRecommendationToolSchema, applyRecommendation],
+    ["reporting", "dismiss_recommendation", "Dismiss an optimization recommendation so Google stops suggesting it.", DismissRecommendationToolSchema, dismissRecommendation],
     // Reporting
-    ["get_search_terms", "Get search terms report.", GetSearchTermsToolSchema, getSearchTerms],
-    ["get_change_history", "Get change history (change_event).", GetChangeHistoryToolSchema, getChangeHistory],
+    ["reporting", "get_search_terms", "Get the search terms report: the queries people actually typed, with clicks, cost and conversions. The starting point for negative keyword and keyword mining work.", GetSearchTermsToolSchema, getSearchTerms],
+    ["reporting", "get_change_history", "Get the account change history (change_event): what changed, when, and by whom. Use it to explain a sudden shift in performance.", GetChangeHistoryToolSchema, getChangeHistory],
     // Ad management
-    ["create_responsive_search_ad", "Create a Responsive Search Ad.", CreateResponsiveSearchAdToolSchema, createResponsiveSearchAd],
-    ["pause_ad", "Pause an ad.", PauseAdToolSchema, pauseAd],
-    ["enable_ad", "Enable an ad.", EnableAdToolSchema, enableAd],
-    ["remove_ad", "Remove an ad.", RemoveAdToolSchema, removeAd],
+    ["core", "create_responsive_search_ad", "Create a Responsive Search Ad from headlines and descriptions, with optional pinning and display paths.", CreateResponsiveSearchAdToolSchema, createResponsiveSearchAd],
+    ["core", "pause_ad", "Pause a single ad so it stops serving.", PauseAdToolSchema, pauseAd],
+    ["core", "enable_ad", "Resume a paused ad.", EnableAdToolSchema, enableAd],
+    ["core", "remove_ad", "Permanently remove an ad from its ad group. Irreversible.", RemoveAdToolSchema, removeAd],
     // Asset management
-    ["create_text_asset", "Create a text asset (e.g. for headlines/descriptions).", CreateTextAssetToolSchema, createTextAsset],
-    ["create_image_asset", "Create an image asset from a URL.", CreateImageAssetToolSchema, createImageAsset],
-    ["list_assets", "List assets (Text, Image, etc).", ListAssetsToolSchema, listAssets],
+    ["assets", "create_text_asset", "Create a reusable text asset for headlines or descriptions, used by Performance Max and asset-based ads.", CreateTextAssetToolSchema, createTextAsset],
+    ["assets", "create_image_asset", "Create an image asset from a URL, for Performance Max, Display and extensions.", CreateImageAssetToolSchema, createImageAsset],
+    ["assets", "list_assets", "List the assets in an account (text, image, video and more) with their type and name.", ListAssetsToolSchema, listAssets],
     // Shopping / PMax
-    ["list_shopping_performance", "List product performance (Standard Shopping).", ListShoppingPerformanceToolSchema, listShoppingPerformance],
-    ["list_listing_groups", "List standard shopping listing groups (product partitions).", ListListingGroupsToolSchema, listListingGroups],
-    ["list_asset_group_listing_groups", "List PMax asset group listing groups.", ListAssetGroupListingGroupsToolSchema, listAssetGroupListingGroups],
+    ["shopping", "list_shopping_performance", "Report product-level Standard Shopping performance: impressions, clicks, cost and conversions per offer.", ListShoppingPerformanceToolSchema, listShoppingPerformance],
+    ["shopping", "list_listing_groups", "List Standard Shopping listing groups (product partitions) and their bids.", ListListingGroupsToolSchema, listListingGroups],
+    ["shopping", "list_asset_group_listing_groups", "List Performance Max asset group listing group filters — which products each asset group covers.", ListAssetGroupListingGroupsToolSchema, listAssetGroupListingGroups],
     // Batch Jobs
-    ["create_batch_job", "Create a new batch job.", CreateBatchJobToolSchema, createBatchJob],
-    ["list_batch_jobs", "List batch jobs.", ListBatchJobsToolSchema, listBatchJobs],
-    ["add_batch_job_operations", "Add operations to a batch job.", AddBatchJobOperationsToolSchema, addBatchJobOperations],
-    ["run_batch_job", "Run a batch job.", RunBatchJobToolSchema, runBatchJob],
+    ["resources", "create_batch_job", "Create a Google Ads batch job for large sets of mutations that must run asynchronously.", CreateBatchJobToolSchema, createBatchJob],
+    ["resources", "list_batch_jobs", "List batch jobs with their status and progress.", ListBatchJobsToolSchema, listBatchJobs],
+    ["resources", "add_batch_job_operations", "Add mutate operations to a pending batch job.", AddBatchJobOperationsToolSchema, addBatchJobOperations],
+    ["resources", "run_batch_job", "Start a batch job. It runs asynchronously; poll list_batch_jobs for its status.", RunBatchJobToolSchema, runBatchJob],
     // Billing
-    ["list_invoices", "List invoices.", ListInvoicesToolSchema, listInvoices],
-    ["list_account_budgets", "List account budgets.", ListAccountBudgetsToolSchema, listAccountBudgets],
-    ["list_billing_setups", "List billing setups.", ListBillingSetupsToolSchema, listBillingSetups],
+    ["billing", "list_invoices", "List the invoices issued for an account's billing setup, by month.", ListInvoicesToolSchema, listInvoices],
+    ["billing", "list_account_budgets", "List account budgets — the billing-level spend caps, not campaign budgets.", ListAccountBudgetsToolSchema, listAccountBudgets],
+    ["billing", "list_billing_setups", "List billing setups: which payments account funds this Google Ads account.", ListBillingSetupsToolSchema, listBillingSetups],
     // Identity Verification
-    ["start_identity_verification", "Start identity verification.", StartIdentityVerificationToolSchema, startIdentityVerification],
-    ["get_identity_verification", "Get identity verification status.", GetIdentityVerificationToolSchema, getIdentityVerification],
+    ["billing", "start_identity_verification", "Start the advertiser identity verification Google requires to keep ads serving.", StartIdentityVerificationToolSchema, startIdentityVerification],
+    ["billing", "get_identity_verification", "Check advertiser identity verification progress and its deadline.", GetIdentityVerificationToolSchema, getIdentityVerification],
     // Local Services
-    ["list_local_services_leads", "List Local Services leads.", ListLocalServicesLeadsToolSchema, listLocalServicesLeads],
+    ["reporting", "list_local_services_leads", "List Local Services Ads leads (calls and messages) with their status and charge.", ListLocalServicesLeadsToolSchema, listLocalServicesLeads],
     // Policy
-    ["list_policy_findings", "List ads with policy issues.", ListPolicyFindingsToolSchema, listPolicyFindings],
+    ["reporting", "list_policy_findings", "List ads that are disapproved or limited by policy, with the policy topic and the evidence Google cited.", ListPolicyFindingsToolSchema, listPolicyFindings],
     // Experiments
-    ["list_experiments", "List campaigns experiments.", ListExperimentsToolSchema, listExperiments],
-    ["create_experiment", "Create a new campaign experiment.", CreateExperimentToolSchema, createExperiment],
+    ["experiments", "list_experiments", "List campaign experiments with their status, traffic split and dates.", ListExperimentsToolSchema, listExperiments],
+    ["experiments", "create_experiment", "Create a campaign experiment (A/B test) from a draft, splitting traffic against the base campaign.", CreateExperimentToolSchema, createExperiment],
     // Reach Planning
-    ["list_reach_plan_locations", "List locations for reach planning.", ListReachPlanLocationsToolSchema, listReachPlanLocations],
-    ["generate_reach_forecast", "Generate a reach forecast.", GenerateReachForecastToolSchema, generateReachForecast],
+    ["planning", "list_reach_plan_locations", "List the locations available for reach planning (YouTube and Display forecasts).", ListReachPlanLocationsToolSchema, listReachPlanLocations],
+    ["planning", "generate_reach_forecast", "Forecast reach, impressions and frequency for a YouTube or Display plan before committing budget.", GenerateReachForecastToolSchema, generateReachForecast],
+];
+
+/**
+ * Names whose results are bulk rows rather than a mutation acknowledgement.
+ * Only these need to advertise the result ceiling to the client.
+ */
+function returnsBulkRows(toolName: string): boolean {
+    return /^(list|get|run|search|generate)_/.test(toolName);
+}
+
+/** Prose the client shows the model before any tool is listed. */
+function serverInstructions(enabled: ReadonlySet<Toolset>): string {
+    return [
+        "Read and manage live Google Ads accounts through the Google Ads API.",
+        "",
+        "Use these tools for any question about a real advertising account: spend and budgets,",
+        "campaigns, ad groups, ads, keywords, negatives, search terms, conversions, audiences,",
+        "assets and Performance Max, Shopping and Merchant Center, experiments, bidding and",
+        "billing. Anything the Google Ads UI can show can also be read with a GAQL statement",
+        "through run_gaql_query, so prefer that over guessing at numbers.",
+        "",
+        `Tools are grouped into toolsets: ${TOOLSETS.join(", ")}.`,
+        `Registered in this session: ${[...enabled].join(", ")}.`,
+        "Set GOOGLE_ADS_TOOLSETS (comma-separated, or 'all') to change which groups load.",
+        "",
+        "Two conventions every call must follow:",
+        "- customerId is digits only, no dashes: 1234567890, not 123-456-7890.",
+        "- Destructive tools (remove_*, delete_*, unlink_*, update_customer) refuse to run",
+        "  unless you pass confirm: true.",
+    ].join("\n");
+}
+
+/** Bespoke registration modules, each mapped to the toolset that owns it. */
+const MODULE_REGISTRARS: ReadonlyArray<readonly [Toolset, (server: McpServer) => void]> = [
+    ["core", registerCampaignCrudTools],
+    ["core", registerCampaignTargetingTools],
+    ["core", registerCampaignCloneTools],
+    ["core", registerAdGroupAdvancedTools],
+    ["core", registerAdsAdvancedTools],
+    ["keywords", registerKeywordsAdvancedTools],
+    ["negatives", registerNegativeKeywordListTools],
+    ["planning", registerKeywordPlannerAdvancedTools],
+    ["conversions", registerConversionsAdvancedTools],
+    ["conversions", registerConversionGoalTools],
+    ["assets", registerAssetsAdvancedTools],
+    ["assets", registerAssetSetsSignalsTools],
+    ["experiments", registerExperimentsAdvancedTools],
+    ["experiments", registerCampaignDraftTools],
+    ["audiences", registerCustomerMatchTools],
+    ["audiences", registerAudiencesAdvancedTools],
+    ["bidding", registerBiddingAdvancedTools],
+    ["shopping", registerVerticalTools],
+    ["resources", registerResourceMutationTools],
+    ["resources", registerResourceReadTools],
 ];
 
 /**
@@ -286,7 +342,7 @@ const SIMPLE_TOOLS: readonly SimpleToolEntry[] = [
 const DATABASE_BACKED_TOOLS: ReadonlySet<string> = new Set(["get_user_status"]);
 
 /** Register one {@link SimpleToolEntry}; `asTool` supplies the uniform wrapper. */
-function registerSimpleTool(server: McpServer, [name, description, schema, handler]: SimpleToolEntry): void {
+function registerSimpleTool(server: McpServer, [, name, description, schema, handler]: SimpleToolEntry): void {
     server.registerTool(name, { description, inputSchema: schema.shape }, (args: unknown) =>
         asTool(handler, args)
     );
@@ -296,10 +352,17 @@ function registerSimpleTool(server: McpServer, [name, description, schema, handl
 // guardrails). No transport is connected here, so this builder is reused by
 // both the stdio entry (src/index.ts) and the HTTP transport (src/server/http.ts).
 export function createMcpServer(): McpServer {
-    const server = new McpServer({
-        name: "google-ads-mcp",
-        version: "1.0.0",
-    });
+    const enabledToolsets = resolveToolsets(config.GOOGLE_ADS_TOOLSETS);
+    const server = new McpServer(
+        {
+            name: "google-ads-mcp",
+            version: "1.0.0",
+        },
+        // Tells the model when to come looking for these tools at all. This
+        // matters more, not less, once a client defers tool definitions behind a
+        // search tool: the listing may not be in context, but this is.
+        { instructions: serverInstructions(enabledToolsets) }
+    );
     const originalRegisterTool = server.registerTool.bind(server);
     const registeredToolNames = new Set<string>();
 (server as any).registerTool = (...allArgs: any[]) => {
@@ -316,14 +379,6 @@ export function createMcpServer(): McpServer {
     }
     registeredToolNames.add(name);
     if (config && typeof config === "object" && typeof handler === "function") {
-        // Identity is never accepted from the client: strip the legacy `userId`
-        // field from every tool's advertised input schema so it is not exposed
-        // or validated. The authenticated session (ALS) is authoritative; tool
-        // schemas keep userId internally only for transitional call-site typing.
-        if (config.inputSchema && typeof config.inputSchema === "object" && "userId" in config.inputSchema) {
-            const { userId: _removed, ...withoutUserId } = config.inputSchema;
-            config.inputSchema = withoutUserId;
-        }
         // Auto-inject a `confirm` field into destructive tools' input schema so
         // callers can acknowledge the action without touching each tool file.
         if (isDestructiveTool(name) && config.inputSchema && typeof config.inputSchema === "object" && !(CONFIRM_FIELD in config.inputSchema)) {
@@ -335,6 +390,11 @@ export function createMcpServer(): McpServer {
                     .describe("Must be true to execute this destructive (irreversible) operation."),
             };
         }
+        // Advertise the server's own result ceiling so the client truncates at
+        // the same boundary instead of applying its smaller default.
+        if (returnsBulkRows(name)) {
+            config._meta = { ...config._meta, "anthropic/maxResultSizeChars": maxResultChars() };
+        }
         return (originalRegisterTool as any)(name, config, withRbac(name, handler));
     }
     throw new Error(`registerTool must use modern signature: registerTool(name, config, handler). Invalid call for ${name}.`);
@@ -344,31 +404,22 @@ export function createMcpServer(): McpServer {
 // toErrorMessage) supply all the cross-cutting behavior, so there is no
 // per-tool boilerplate here.
 for (const entry of SIMPLE_TOOLS) {
-    if (DATABASE_BACKED_TOOLS.has(entry[0]) && !hasDatabase()) {
+    const [toolset, name] = entry;
+    if (!enabledToolsets.has(toolset)) {
+        continue;
+    }
+    if (DATABASE_BACKED_TOOLS.has(name) && !hasDatabase()) {
         continue;
     }
     registerSimpleTool(server, entry);
 }
-// Register advanced coverage tools
-registerCampaignCrudTools(server);
-registerCampaignTargetingTools(server);
-registerCampaignCloneTools(server);
-registerAdGroupAdvancedTools(server);
-registerAdsAdvancedTools(server);
-registerKeywordsAdvancedTools(server);
-registerNegativeKeywordListTools(server);
-registerKeywordPlannerAdvancedTools(server);
-registerConversionsAdvancedTools(server);
-registerAssetsAdvancedTools(server);
-registerExperimentsAdvancedTools(server);
-registerCustomerMatchTools(server);
-registerCampaignDraftTools(server);
-registerBiddingAdvancedTools(server);
-registerConversionGoalTools(server);
-registerAudiencesAdvancedTools(server);
-registerAssetSetsSignalsTools(server);
-registerVerticalTools(server);
-registerMutateCoverageV23Tools(server);
-registerReadParityTools(server);
+// Tools with bespoke registration logic, each owned by one toolset. Skipping a
+// disabled group here (rather than registering and filtering afterwards) is
+// what keeps the disabled tools out of tools/list entirely.
+for (const [toolset, register] of MODULE_REGISTRARS) {
+    if (enabledToolsets.has(toolset)) {
+        register(server);
+    }
+}
     return server;
 }

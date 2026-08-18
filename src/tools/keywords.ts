@@ -7,7 +7,6 @@ const KeywordStatusSchema = z.object({
   customerId: z.string().describe("The Google Ads Customer ID"),
   keywordId: z.string().describe("The ID of the keyword (criterion ID) to modify"),
   adGroupId: z.string().describe("The ID of the ad group containing the keyword"),
-  userId: z.string().optional().describe("SaaS User ID"),
 });
 
 const AddKeywordSchema = z.object({
@@ -15,7 +14,6 @@ const AddKeywordSchema = z.object({
   adGroupId: z.string().describe("The ID of the ad group to add the keyword to"),
   text: z.string().describe("The keyword text"),
   matchType: z.enum(["BROAD", "PHRASE", "EXACT"]).describe("The match type for the keyword"),
-  userId: z.string().optional().describe("SaaS User ID"),
 });
 
 async function updateKeywordStatus(
@@ -23,9 +21,8 @@ async function updateKeywordStatus(
   adGroupId: string,
   keywordId: string,
   status: string,
-  userId?: string
 ) {
-  const customer = await getCustomer(customerId, userId);
+  const customer = await getCustomer(customerId);
   const resourceName = `customers/${customerId}/adGroupCriteria/${adGroupId}~${keywordId}`;
   
   const operation = {
@@ -45,7 +42,7 @@ async function updateKeywordStatus(
 
 export const AddKeywordToolSchema = AddKeywordSchema;
 export async function addKeyword(args: z.infer<typeof AddKeywordSchema>) {
-  const customer = await getCustomer(args.customerId, args.userId);
+  const customer = await getCustomer(args.customerId);
   const adGroupResourceName = `customers/${args.customerId}/adGroups/${args.adGroupId}`;
   
   const operation = {
@@ -66,17 +63,17 @@ export async function addKeyword(args: z.infer<typeof AddKeywordSchema>) {
 
 export const PauseKeywordSchema = KeywordStatusSchema;
 export async function pauseKeyword(args: z.infer<typeof PauseKeywordSchema>) {
-  return updateKeywordStatus(args.customerId, args.adGroupId, args.keywordId, "PAUSED", args.userId);
+  return updateKeywordStatus(args.customerId, args.adGroupId, args.keywordId, "PAUSED");
 }
 
 export const EnableKeywordSchema = KeywordStatusSchema;
 export async function enableKeyword(args: z.infer<typeof EnableKeywordSchema>) {
-  return updateKeywordStatus(args.customerId, args.adGroupId, args.keywordId, "ENABLED", args.userId);
+  return updateKeywordStatus(args.customerId, args.adGroupId, args.keywordId, "ENABLED");
 }
 
 export const RemoveKeywordSchema = KeywordStatusSchema;
 export async function removeKeyword(args: z.infer<typeof RemoveKeywordSchema>) {
-  const customer = await getCustomer(args.customerId, args.userId);
+  const customer = await getCustomer(args.customerId);
   const resourceName = `customers/${args.customerId}/adGroupCriteria/${args.adGroupId}~${args.keywordId}`;
 
   const operation = {

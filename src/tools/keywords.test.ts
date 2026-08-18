@@ -19,7 +19,7 @@ beforeEach(() => {
 describe("keywords lifecycle tools", () => {
   it("addKeyword creates an ENABLED keyword criterion", async () => {
     await addKeyword({ customerId: "123", adGroupId: "55", text: "shoes", matchType: "PHRASE" });
-    expect(getCustomer).toHaveBeenCalledWith("123", undefined);
+    expect(getCustomer).toHaveBeenCalledWith("123");
     const create = (runMutation as any).mock.calls[0][1][0].ad_group_criterion_operation.create;
     expect(create).toEqual({
       ad_group: "customers/123/adGroups/55",
@@ -35,7 +35,7 @@ describe("keywords lifecycle tools", () => {
       (getCustomer as any).mockResolvedValue(customer);
       (runMutation as any).mockResolvedValue({});
       await addKeyword({ customerId: "1", adGroupId: "2", text: "t", matchType, userId: "u" });
-      expect(getCustomer).toHaveBeenCalledWith("1", "u");
+      expect(getCustomer).toHaveBeenCalledWith("1");
       const create = (runMutation as any).mock.calls[0][1][0].ad_group_criterion_operation.create;
       expect(create.keyword.match_type).toBe(matchType);
     }
@@ -50,7 +50,7 @@ describe("keywords lifecycle tools", () => {
 
   it("enableKeyword updates status to ENABLED and forwards userId", async () => {
     await enableKeyword({ customerId: "123", adGroupId: "55", keywordId: "999", userId: "u1" });
-    expect(getCustomer).toHaveBeenCalledWith("123", "u1");
+    expect(getCustomer).toHaveBeenCalledWith("123");
     const op = (runMutation as any).mock.calls[0][1][0].ad_group_criterion_operation;
     expect(op.update.status).toBe("ENABLED");
     expect(op.update.resource_name).toBe("customers/123/adGroupCriteria/55~999");
@@ -60,11 +60,11 @@ describe("keywords lifecycle tools", () => {
     await removeKeyword({ customerId: "123", adGroupId: "55", keywordId: "999" });
     const op = (runMutation as any).mock.calls[0][1][0].ad_group_criterion_operation;
     expect(op).toEqual({ remove: "customers/123/adGroupCriteria/55~999" });
-    expect(getCustomer).toHaveBeenCalledWith("123", undefined);
+    expect(getCustomer).toHaveBeenCalledWith("123");
   });
 
   it("removeKeyword forwards userId", async () => {
     await removeKeyword({ customerId: "123", adGroupId: "55", keywordId: "999", userId: "u2" });
-    expect(getCustomer).toHaveBeenCalledWith("123", "u2");
+    expect(getCustomer).toHaveBeenCalledWith("123");
   });
 });

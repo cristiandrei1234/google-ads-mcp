@@ -19,7 +19,7 @@ beforeEach(() => {
 describe("adgroups lifecycle tools", () => {
   it("pauseAdGroup updates status to PAUSED with the status mask", async () => {
     await pauseAdGroup({ customerId: "123", adGroupId: "55" });
-    expect(getCustomer).toHaveBeenCalledWith("123", undefined);
+    expect(getCustomer).toHaveBeenCalledWith("123");
     const op = (runMutation as any).mock.calls[0][1][0].ad_group_operation;
     expect(op.update).toEqual({ resource_name: "customers/123/adGroups/55", status: "PAUSED" });
     expect(op.update_mask.paths).toEqual(["status"]);
@@ -28,7 +28,7 @@ describe("adgroups lifecycle tools", () => {
 
   it("enableAdGroup updates status to ENABLED and forwards userId", async () => {
     await enableAdGroup({ customerId: "123", adGroupId: "55", userId: "u1" });
-    expect(getCustomer).toHaveBeenCalledWith("123", "u1");
+    expect(getCustomer).toHaveBeenCalledWith("123");
     const op = (runMutation as any).mock.calls[0][1][0].ad_group_operation;
     expect(op.update.status).toBe("ENABLED");
     expect(op.update.resource_name).toBe("customers/123/adGroups/55");
@@ -38,11 +38,11 @@ describe("adgroups lifecycle tools", () => {
     await removeAdGroup({ customerId: "123", adGroupId: "55" });
     const op = (runMutation as any).mock.calls[0][1][0].ad_group_operation;
     expect(op).toEqual({ remove: "customers/123/adGroups/55" });
-    expect(getCustomer).toHaveBeenCalledWith("123", undefined);
+    expect(getCustomer).toHaveBeenCalledWith("123");
   });
 
   it("removeAdGroup forwards userId", async () => {
     await removeAdGroup({ customerId: "123", adGroupId: "55", userId: "u2" });
-    expect(getCustomer).toHaveBeenCalledWith("123", "u2");
+    expect(getCustomer).toHaveBeenCalledWith("123");
   });
 });

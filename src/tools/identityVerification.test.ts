@@ -25,7 +25,7 @@ describe("startIdentityVerification", () => {
     const c = customerWithIdentity();
     (getCustomer as any).mockResolvedValue(c);
     const res = await startIdentityVerification({ customerId: "1" });
-    expect(getCustomer).toHaveBeenCalledWith("1", undefined);
+    expect(getCustomer).toHaveBeenCalledWith("1");
     expect(c.identityVerifications.startIdentityVerification).toHaveBeenCalledWith({
       customer_id: "1",
       verification_program: "ADVERTISER_IDENTITY_VERIFICATION",
@@ -41,7 +41,7 @@ describe("startIdentityVerification", () => {
     });
     (getCustomer as any).mockResolvedValue(c);
     await expect(startIdentityVerification({ customerId: "1", userId: "u" })).rejects.toThrow("start boom");
-    expect(getCustomer).toHaveBeenCalledWith("1", "u");
+    expect(getCustomer).toHaveBeenCalledWith("1");
   });
 });
 

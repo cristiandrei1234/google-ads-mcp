@@ -8,12 +8,11 @@ import logger from "../observability/logger.js";
 const CreateBatchJobSchema = z.object({
   customerId: z.string().describe("The Google Ads Customer ID"),
   scramblingId: z.string().optional().describe("Optional scrambling ID for the batch job"),
-  userId: z.string().optional().describe("SaaS User ID"),
 });
 
 export const CreateBatchJobToolSchema = CreateBatchJobSchema;
 export async function createBatchJob(args: z.infer<typeof CreateBatchJobSchema>) {
-  const customer = await getCustomer(args.customerId, args.userId);
+  const customer = await getCustomer(args.customerId);
 
   try {
     const service = (customer as any).loadService("BatchJobServiceClient");
@@ -43,12 +42,11 @@ export async function createBatchJob(args: z.infer<typeof CreateBatchJobSchema>)
 const ListBatchJobsSchema = z.object({
   customerId: z.string().describe("The Google Ads Customer ID"),
   limit: z.number().default(50),
-  userId: z.string().optional().describe("SaaS User ID"),
 });
 
 export const ListBatchJobsToolSchema = ListBatchJobsSchema;
 export async function listBatchJobs(args: z.infer<typeof ListBatchJobsSchema>) {
-  const customer = await getCustomer(args.customerId, args.userId);
+  const customer = await getCustomer(args.customerId);
   
   const query = `
     SELECT
@@ -71,12 +69,11 @@ export async function listBatchJobs(args: z.infer<typeof ListBatchJobsSchema>) {
 const RunBatchJobSchema = z.object({
   customerId: z.string().describe("The Google Ads Customer ID"),
   batchJobResourceName: z.string().describe("The resource name of the batch job to run"),
-  userId: z.string().optional().describe("SaaS User ID"),
 });
 
 export const RunBatchJobToolSchema = RunBatchJobSchema;
 export async function runBatchJob(args: z.infer<typeof RunBatchJobSchema>) {
-  const customer = await getCustomer(args.customerId, args.userId);
+  const customer = await getCustomer(args.customerId);
   
   try {
     const result = await customer.batchJobs.runBatchJob({
@@ -93,7 +90,6 @@ const AddBatchJobOperationsSchema = z.object({
   customerId: z.string().describe("The Google Ads Customer ID"),
   batchJobResourceName: z.string().describe("The resource name of the batch job"),
   operations: z.array(z.any()).describe("List of mutate operations to add"),
-  userId: z.string().optional().describe("SaaS User ID"),
 });
 
 // Note: This tool is complex because 'operations' is a polymorphic list of any Google Ads operation.
@@ -102,7 +98,7 @@ const AddBatchJobOperationsSchema = z.object({
 
 export const AddBatchJobOperationsToolSchema = AddBatchJobOperationsSchema;
 export async function addBatchJobOperations(args: z.infer<typeof AddBatchJobOperationsSchema>) {
-  const customer = await getCustomer(args.customerId, args.userId);
+  const customer = await getCustomer(args.customerId);
 
   if (!args.operations || args.operations.length === 0) {
     return {

@@ -10,12 +10,11 @@ const CreateTextAssetSchema = z.object({
   customerId: z.string().describe("The Google Ads Customer ID"),
   text: z.string().describe("The content of the text asset"),
   name: z.string().optional().describe("Optional name for the asset"),
-  userId: z.string().optional().describe("SaaS User ID"),
 });
 
 export const CreateTextAssetToolSchema = CreateTextAssetSchema;
 export async function createTextAsset(args: z.infer<typeof CreateTextAssetSchema>) {
-  const customer = await getCustomer(args.customerId, args.userId);
+  const customer = await getCustomer(args.customerId);
   
   const operation = {
     asset_operation: {
@@ -38,12 +37,11 @@ const CreateImageAssetSchema = z.object({
   customerId: z.string().describe("The Google Ads Customer ID"),
   imageUrl: z.string().describe("The URL of the image to upload"),
   name: z.string().optional().describe("Optional name for the asset"),
-  userId: z.string().optional().describe("SaaS User ID"),
 });
 
 export const CreateImageAssetToolSchema = CreateImageAssetSchema;
 export async function createImageAsset(args: z.infer<typeof CreateImageAssetSchema>) {
-  const customer = await getCustomer(args.customerId, args.userId);
+  const customer = await getCustomer(args.customerId);
   
   try {
     // 1. Fetch the image (SSRF-guarded: rejects private/loopback targets,
@@ -77,12 +75,11 @@ const ListAssetsSchema = z.object({
   customerId: z.string().describe("The Google Ads Customer ID"),
   types: z.array(z.string()).optional().describe("Filter by asset types (e.g., TEXT, IMAGE)"),
   limit: z.number().default(50).describe("Limit results"),
-  userId: z.string().optional().describe("SaaS User ID"),
 });
 
 export const ListAssetsToolSchema = ListAssetsSchema;
 export async function listAssets(args: z.infer<typeof ListAssetsSchema>) {
-  const customer = await getCustomer(args.customerId, args.userId);
+  const customer = await getCustomer(args.customerId);
   
   let query = `
     SELECT

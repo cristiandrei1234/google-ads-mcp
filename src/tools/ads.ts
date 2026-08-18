@@ -18,12 +18,11 @@ const CreateResponsiveSearchAdSchema = z.object({
   finalUrls: z.array(z.string()).describe("List of final URLs"),
   path1: z.string().optional().describe("Path 1 (display URL)"),
   path2: z.string().optional().describe("Path 2 (display URL)"),
-  userId: z.string().optional().describe("SaaS User ID"),
 });
 
 export const CreateResponsiveSearchAdToolSchema = CreateResponsiveSearchAdSchema;
 export async function createResponsiveSearchAd(args: z.infer<typeof CreateResponsiveSearchAdSchema>) {
-  const customer = await getCustomer(args.customerId, args.userId);
+  const customer = await getCustomer(args.customerId);
   const adGroupResourceName = `customers/${args.customerId}/adGroups/${args.adGroupId}`;
   
   const operation = {
@@ -59,12 +58,11 @@ const PauseAdSchema = z.object({
   customerId: z.string().describe("The Google Ads Customer ID"),
   adId: z.string().describe("The Ad ID"),
   adGroupId: z.string().describe("The Ad Group ID"),
-  userId: z.string().optional().describe("SaaS User ID"),
 });
 
 export const PauseAdToolSchema = PauseAdSchema;
 export async function pauseAd(args: z.infer<typeof PauseAdSchema>) {
-  const customer = await getCustomer(args.customerId, args.userId);
+  const customer = await getCustomer(args.customerId);
   const resourceName = `customers/${args.customerId}/adGroupAds/${args.adGroupId}~${args.adId}`;
   
   const operation = {
@@ -86,7 +84,7 @@ const EnableAdSchema = PauseAdSchema;
 
 export const EnableAdToolSchema = EnableAdSchema;
 export async function enableAd(args: z.infer<typeof EnableAdSchema>) {
-  const customer = await getCustomer(args.customerId, args.userId);
+  const customer = await getCustomer(args.customerId);
   const resourceName = `customers/${args.customerId}/adGroupAds/${args.adGroupId}~${args.adId}`;
   
   const operation = {
@@ -108,7 +106,7 @@ const RemoveAdSchema = PauseAdSchema;
 
 export const RemoveAdToolSchema = RemoveAdSchema;
 export async function removeAd(args: z.infer<typeof RemoveAdSchema>) {
-  const customer = await getCustomer(args.customerId, args.userId);
+  const customer = await getCustomer(args.customerId);
   const resourceName = `customers/${args.customerId}/adGroupAds/${args.adGroupId}~${args.adId}`;
   
   const operation = {

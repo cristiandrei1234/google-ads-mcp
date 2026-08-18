@@ -88,7 +88,6 @@ async function listCustomAudiences(args: z.infer<typeof ListCustomAudiencesSchem
 
   return runQuery({
     customerId: args.customerId,
-    userId: args.userId,
     query: `SELECT
       custom_audience.resource_name,
       custom_audience.id,
@@ -156,7 +155,7 @@ const CreateCustomAudienceSchema = BaseSchema.extend({
 });
 
 async function createCustomAudience(args: z.infer<typeof CreateCustomAudienceSchema>) {
-  const customer = await getCustomer(args.customerId, args.userId);
+  const customer = await getCustomer(args.customerId);
 
   const create: Record<string, unknown> = {
     name: args.name,
@@ -182,7 +181,7 @@ const UpdateCustomAudienceSchema = BaseSchema.extend({
 });
 
 async function updateCustomAudience(args: z.infer<typeof UpdateCustomAudienceSchema>) {
-  const customer = await getCustomer(args.customerId, args.userId);
+  const customer = await getCustomer(args.customerId);
 
   const update: Record<string, unknown> = {
     resource_name: toCustomAudienceResourceName(args.customerId, args.customAudienceId),
@@ -222,7 +221,7 @@ const RemoveCustomAudienceSchema = BaseSchema.extend({
 });
 
 async function removeCustomAudience(args: z.infer<typeof RemoveCustomAudienceSchema>) {
-  const customer = await getCustomer(args.customerId, args.userId);
+  const customer = await getCustomer(args.customerId);
 
   return mutateCustomAudiences(customer, args.customerId, [
     {
@@ -241,7 +240,6 @@ async function listCombinedAudiences(args: z.infer<typeof ListCombinedAudiencesS
 
   return runQuery({
     customerId: args.customerId,
-    userId: args.userId,
     query: `SELECT
       combined_audience.resource_name,
       combined_audience.id,
@@ -264,7 +262,7 @@ const AddCampaignCustomAudienceTargetingSchema = BaseSchema.extend({
 async function addCampaignCustomAudienceTargeting(
   args: z.infer<typeof AddCampaignCustomAudienceTargetingSchema>
 ) {
-  const customer = await getCustomer(args.customerId, args.userId);
+  const customer = await getCustomer(args.customerId);
 
   return runMutation(customer, [
     {
@@ -290,7 +288,7 @@ const AddCampaignCombinedAudienceTargetingSchema = BaseSchema.extend({
 async function addCampaignCombinedAudienceTargeting(
   args: z.infer<typeof AddCampaignCombinedAudienceTargetingSchema>
 ) {
-  const customer = await getCustomer(args.customerId, args.userId);
+  const customer = await getCustomer(args.customerId);
 
   return runMutation(customer, [
     {
@@ -314,7 +312,7 @@ const AddAdGroupCustomAudienceTargetingSchema = BaseSchema.extend({
 });
 
 async function addAdGroupCustomAudienceTargeting(args: z.infer<typeof AddAdGroupCustomAudienceTargetingSchema>) {
-  const customer = await getCustomer(args.customerId, args.userId);
+  const customer = await getCustomer(args.customerId);
 
   return runMutation(customer, [
     {
@@ -340,7 +338,7 @@ const AddAdGroupCombinedAudienceTargetingSchema = BaseSchema.extend({
 async function addAdGroupCombinedAudienceTargeting(
   args: z.infer<typeof AddAdGroupCombinedAudienceTargetingSchema>
 ) {
-  const customer = await getCustomer(args.customerId, args.userId);
+  const customer = await getCustomer(args.customerId);
 
   return runMutation(customer, [
     {
@@ -363,7 +361,7 @@ const RemoveCampaignAudienceTargetingSchema = BaseSchema.extend({
 });
 
 async function removeCampaignAudienceTargeting(args: z.infer<typeof RemoveCampaignAudienceTargetingSchema>) {
-  const customer = await getCustomer(args.customerId, args.userId);
+  const customer = await getCustomer(args.customerId);
 
   return runMutation(customer, [
     {
@@ -380,7 +378,7 @@ const RemoveAdGroupAudienceTargetingSchema = BaseSchema.extend({
 });
 
 async function removeAdGroupAudienceTargeting(args: z.infer<typeof RemoveAdGroupAudienceTargetingSchema>) {
-  const customer = await getCustomer(args.customerId, args.userId);
+  const customer = await getCustomer(args.customerId);
 
   return runMutation(customer, [
     {

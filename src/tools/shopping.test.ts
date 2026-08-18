@@ -34,7 +34,7 @@ describe("listShoppingPerformance", () => {
 
   it("passes userId", async () => {
     await listShoppingPerformance({ customerId: "1", dateRange: "TODAY", limit: 5, userId: "u" });
-    expect(getCustomer).toHaveBeenCalledWith("1", "u");
+    expect(getCustomer).toHaveBeenCalledWith("1");
   });
 
   it("falls back to non-metric query on REQUESTED_METRICS_FOR_MANAGER", async () => {

@@ -50,11 +50,11 @@ describe("negativeKeywordLists tools", () => {
     expect(arg.query).toContain("LIMIT 100");
   });
 
-  it("list_shared_negative_keyword_lists honors a custom limit and userId", async () => {
-    await call("list_shared_negative_keyword_lists", { customerId: "1", limit: 25, userId: "u1" });
+  it("list_shared_negative_keyword_lists honors a custom limit", async () => {
+    await call("list_shared_negative_keyword_lists", { customerId: "1", limit: 25 });
     const arg = (runQuery as any).mock.calls[0][0];
     expect(arg.query).toContain("LIMIT 25");
-    expect(arg.userId).toBe("u1");
+    expect(arg.customerId).toBe("1");
   });
 
   it("create_shared_negative_keyword_list creates the set without keywords", async () => {

@@ -77,7 +77,7 @@ describe("assetSetsSignals tools", () => {
   // ---------------- create_asset_set ----------------
   it("create_asset_set sends create mutation with defaults passed through", async () => {
     await call("create_asset_set", { customerId: CID, name: "S", type: "PAGE_FEED", status: "ENABLED" });
-    expect(getCustomer).toHaveBeenCalledWith(CID, undefined);
+    expect(getCustomer).toHaveBeenCalledWith(CID);
     const op = (runMutation as any).mock.calls[0][1][0].asset_set_operation;
     expect(op.create).toEqual({ name: "S", type: "PAGE_FEED", status: "ENABLED" });
   });

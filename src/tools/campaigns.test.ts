@@ -19,7 +19,7 @@ beforeEach(() => {
 describe("campaigns lifecycle tools", () => {
   it("pauseCampaign updates status to PAUSED with the status mask", async () => {
     await pauseCampaign({ customerId: "123", campaignId: "7" });
-    expect(getCustomer).toHaveBeenCalledWith("123", undefined);
+    expect(getCustomer).toHaveBeenCalledWith("123");
     const op = (runMutation as any).mock.calls[0][1][0].campaign_operation;
     expect(op.update).toEqual({ resource_name: "customers/123/campaigns/7", status: "PAUSED" });
     expect(op.update_mask.paths).toEqual(["status"]);
@@ -28,7 +28,7 @@ describe("campaigns lifecycle tools", () => {
 
   it("enableCampaign updates status to ENABLED and forwards userId", async () => {
     await enableCampaign({ customerId: "123", campaignId: "7", userId: "u1" });
-    expect(getCustomer).toHaveBeenCalledWith("123", "u1");
+    expect(getCustomer).toHaveBeenCalledWith("123");
     const op = (runMutation as any).mock.calls[0][1][0].campaign_operation;
     expect(op.update.status).toBe("ENABLED");
     expect(op.update.resource_name).toBe("customers/123/campaigns/7");
@@ -38,11 +38,11 @@ describe("campaigns lifecycle tools", () => {
     await removeCampaign({ customerId: "123", campaignId: "7" });
     const op = (runMutation as any).mock.calls[0][1][0].campaign_operation;
     expect(op).toEqual({ remove: "customers/123/campaigns/7" });
-    expect(getCustomer).toHaveBeenCalledWith("123", undefined);
+    expect(getCustomer).toHaveBeenCalledWith("123");
   });
 
   it("removeCampaign forwards userId", async () => {
     await removeCampaign({ customerId: "123", campaignId: "7", userId: "u2" });
-    expect(getCustomer).toHaveBeenCalledWith("123", "u2");
+    expect(getCustomer).toHaveBeenCalledWith("123");
   });
 });

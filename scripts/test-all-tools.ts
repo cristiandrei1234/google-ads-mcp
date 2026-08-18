@@ -34,10 +34,10 @@ import {
   listAssetGroupListingGroups,
 } from "../src/tools/shopping.js";
 import { listAudienceInsights, listHotelPerformance } from "../src/tools/verticals.js";
-import { MUTATE_COVERAGE_V23_EXPECTED_TOOL_NAMES } from "../src/tools/mutateCoverageV23.js";
-import { registerMutateCoverageV23Tools } from "../src/tools/mutateCoverageV23.js";
-import { READ_PARITY_EXPECTED_TOOL_NAMES } from "../src/tools/readParity.js";
-import { registerReadParityTools } from "../src/tools/readParity.js";
+import { RESOURCE_MUTATION_TOOL_NAMES } from "../src/tools/resourceMutations.js";
+import { registerResourceMutationTools } from "../src/tools/resourceMutations.js";
+import { RESOURCE_READ_TOOL_NAMES } from "../src/tools/resourceReads.js";
+import { registerResourceReadTools } from "../src/tools/resourceReads.js";
 
 dotenv.config();
 
@@ -69,19 +69,24 @@ function collectCoverageGeneratedToolNames(): Set<string> {
     },
   } as any;
 
-  registerMutateCoverageV23Tools(fakeServer);
-  registerReadParityTools(fakeServer);
+  registerResourceMutationTools(fakeServer);
+  registerResourceReadTools(fakeServer);
 
   return names;
 }
 
-function hasCoverageRegistrationInIndex(): boolean {
+/**
+ * The generated resource families must stay wired into the server builder. They
+ * are registered through the MODULE_REGISTRARS table in createServer.ts (not
+ * from the stdio entry point), so that is what this checks.
+ */
+function hasCoverageRegistration(): boolean {
   const repoRoot = path.resolve(__dirname, "..");
-  const indexPath = path.join(repoRoot, "src", "index.ts");
-  const content = fs.readFileSync(indexPath, "utf8");
+  const builderPath = path.join(repoRoot, "src", "createServer.ts");
+  const content = fs.readFileSync(builderPath, "utf8");
   return (
-    content.includes("registerMutateCoverageV23Tools(server);") &&
-    content.includes("registerReadParityTools(server);")
+    content.includes("registerResourceMutationTools") &&
+    content.includes("registerResourceReadTools")
   );
 }
 
@@ -298,14 +303,14 @@ async function main() {
   console.log(`Using TEST_USER_ID=${userId}`);
 
   await test("new_coverage_tool_registration", async () => {
-    if (!hasCoverageRegistrationInIndex()) {
-      throw new Error("Coverage tool registration functions are not called from src/index.ts");
+    if (!hasCoverageRegistration()) {
+      throw new Error("Resource coverage tools are not registered from src/createServer.ts");
     }
     const registered = collectCoverageGeneratedToolNames();
     const expected = [
       ...new Set([
-        ...MUTATE_COVERAGE_V23_EXPECTED_TOOL_NAMES,
-        ...READ_PARITY_EXPECTED_TOOL_NAMES,
+        ...RESOURCE_MUTATION_TOOL_NAMES,
+        ...RESOURCE_READ_TOOL_NAMES,
       ]),
     ];
     const missing = expected.filter(name => !registered.has(name));
