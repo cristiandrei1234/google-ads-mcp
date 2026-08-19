@@ -51,6 +51,7 @@ import {
     CONFIRM_FIELD,
 } from "./policies/destructive.js";
 import { getIdentity } from "./auth/identityContext.js";
+import { buildAuditEntry, recordAuditEntry, type AuditOutcome } from "./observability/auditTrail.js";
 import config, { hasDatabase } from "./config/env.js";
 import { resolveToolsets, TOOLSETS, type Toolset } from "./policies/toolsets.js";
 import {
@@ -82,27 +83,13 @@ function extractCustomerIdFromArgs(args: unknown): string | undefined {
 function audit(
     toolName: string,
     customerId: string | undefined,
-    outcome: "ok" | "error" | "denied",
+    outcome: AuditOutcome,
     errorKind?: string
 ): void {
-    const identity = getIdentity();
-    if (!identity?.orgId) {
-        return; // single-operator/stdio: nothing to attribute to an org.
+    const entry = buildAuditEntry(getIdentity(), toolName, customerId, outcome, errorKind);
+    if (entry) {
+        recordAuditEntry(entry);
     }
-    const { orgId, memberId, userId } = identity;
-    // Imported past the guard above so a stdio process never loads Prisma.
-    void import("./services/db.js")
-        .then(({ appendAuditLog }) =>
-            appendAuditLog({
-                organizationId: orgId,
-                memberId,
-                tool: toolName,
-                customerId: customerId ?? null,
-                outcome,
-                errorKind: errorKind ?? null,
-            })
-        )
-        .catch((err) => logger.warn({ err, tool: toolName }, "audit log write failed"));
 }
 
 function withRbac(toolName: string, handler: RegisteredToolHandler): RegisteredToolHandler {
@@ -112,7 +99,7 @@ function withRbac(toolName: string, handler: RegisteredToolHandler): RegisteredT
         // metric (always, incl. single-operator/stdio) at every terminal outcome.
         const finish = (
             customerId: string | undefined,
-            outcome: "ok" | "error" | "denied",
+            outcome: AuditOutcome,
             errorKind?: string
         ) => {
             audit(toolName, customerId, outcome, errorKind);
@@ -173,7 +160,7 @@ function withRbac(toolName: string, handler: RegisteredToolHandler): RegisteredT
             );
             // Tools that catch internally return {isError:true} instead of throwing;
             // record those as errors, not successes.
-            const outcome = result && typeof result === "object" && (result as { isError?: unknown }).isError === true ? "error" : "ok";
+            const outcome: AuditOutcome = result && typeof result === "object" && (result as { isError?: unknown }).isError === true ? "error" : "ok";
             finish(customerId, outcome);
             return result;
         }
