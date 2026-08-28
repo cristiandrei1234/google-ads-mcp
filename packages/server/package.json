@@ -37,21 +37,21 @@
     "access": "public"
   },
   "dependencies": {
-    "@better-auth/sso": "~1.6.30",
-    "@prisma/adapter-pg": "^7.9.1",
-    "@prisma/client": "^7.9.1",
+    "@better-auth/sso": "~1.7.1",
+    "@prisma/adapter-pg": "^7.10.0",
+    "@prisma/client": "^7.10.0",
     "@react-email/components": "^1.0.12",
     "@react-email/render": "^2.1.0",
-    "better-auth": "~1.6.30",
+    "better-auth": "~1.7.1",
     "cookie-parser": "^1.4.7",
     "cors": "^2.8.6",
     "express": "^5.2.1",
     "express-rate-limit": "^8.6.2",
     "express-session": "^1.19.0",
     "helmet": "^8.3.0",
-    "prisma": "^7.9.1",
+    "prisma": "^7.10.0",
     "react": "^19.2.8",
     "react-dom": "^19.2.8",
-    "resend": "^6.20.0"
+    "resend": "^6.22.1"
   }
 }
