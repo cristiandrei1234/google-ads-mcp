@@ -3,6 +3,8 @@ dist
 .git
 .env
 .env.local
+.env.*
+backups
 *.log
 dev.db
 plan.md

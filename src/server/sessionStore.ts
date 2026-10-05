@@ -16,6 +16,7 @@ export interface ClosableTransport {
 export interface ManagedSession<T extends ClosableTransport = ClosableTransport> {
   transport: T;
   ownerUserId: string;
+  ownerOrgId: string | null;
   /** Epoch ms of the last request seen on this session. */
   lastSeenAt: number;
 }
@@ -31,18 +32,19 @@ export class SessionStore<T extends ClosableTransport = ClosableTransport> {
   }
 
   /** Register a session, stamping its initial activity time. */
-  add(sessionId: string, transport: T, ownerUserId: string): void {
-    this.sessions.set(sessionId, { transport, ownerUserId, lastSeenAt: this.now() });
+  add(sessionId: string, transport: T, ownerUserId: string, ownerOrgId: string | null = null): void {
+    this.sessions.set(sessionId, { transport, ownerUserId, ownerOrgId, lastSeenAt: this.now() });
   }
 
   /**
    * Return the session iff it exists AND is owned by `userId`. A wrong owner is
    * indistinguishable from "not found" by design (no cross-tenant leakage).
    */
-  getOwned(sessionId: string | undefined, userId: string): ManagedSession<T> | null {
+  getOwned(sessionId: string | undefined, userId: string, orgId?: string | null): ManagedSession<T> | null {
     if (!sessionId) return null;
     const session = this.sessions.get(sessionId);
     if (!session || session.ownerUserId !== userId) return null;
+    if (orgId !== undefined && session.ownerOrgId !== orgId) return null;
     return session;
   }
 

@@ -6,6 +6,7 @@ import { getPrisma } from "../services/db.js";
 import config from "../config/env.js";
 import logger from "../observability/logger.js";
 import { sendActionEmail, isEmailConfigured } from "../services/email.js";
+import { bindAuthorization, mcpTokenHooks, MCP_OIDC_CONFIG } from "./mcpPolicy.js";
 
 /**
  * Canonical Better Auth instance — the single source of truth for employee
@@ -43,6 +44,26 @@ export const auth = betterAuth({
   secret: config.BETTER_AUTH_SECRET,
   database: prismaAdapter(getPrisma(), { provider: "postgresql" }),
   trustedOrigins,
+  hooks: mcpTokenHooks,
+  databaseHooks: {
+    verification: {
+      create: {
+        before: async (verification, ctx) => {
+          if (!ctx?.context.session) return;
+          // The MCP plugin can resume authorization in a sign-in after-hook.
+          // Identify OAuth codes by their data, rather than only the route name.
+          let value: Record<string, unknown>;
+          try { value = JSON.parse(verification.value); } catch { return; }
+          if (!value || typeof value !== "object" || typeof value.clientId !== "string" || typeof value.redirectURI !== "string" || !Array.isArray(value.scope)) return;
+          const session = ctx.context.session;
+          return { data: { ...verification, value: await bindAuthorization(verification.value, {
+            user: session.user,
+            session: { activeOrganizationId: typeof session.session.activeOrganizationId === "string" ? session.session.activeOrganizationId : null },
+          }) } };
+        },
+      },
+    },
+  },
 
   emailAndPassword: {
     enabled: true,
@@ -116,7 +137,7 @@ export const auth = betterAuth({
         logger.info({ userId: user.id, email: user.email }, "SSO user provisioned");
       },
     }),
-    mcp({ loginPage: "/sign-in" }),
+    mcp({ loginPage: `${webAppOrigin}/sign-in`, oidcConfig: { ...MCP_OIDC_CONFIG, loginPage: `${webAppOrigin}/sign-in` } }),
   ],
 });
 

@@ -1,31 +1,7 @@
-import dotenv from 'dotenv';
-import { z } from 'zod';
-import { fileURLToPath } from 'node:url';
-import fs from 'node:fs';
-import os from 'node:os';
-import path from 'node:path';
+import { z } from "zod";
+import { loadEnvironment } from "./envFile.js";
 
-// Load .env from the first candidate that exists, so the server works
-// regardless of the launcher's working directory (e.g. Claude Desktop spawns it
-// from System32) AND when the package is installed globally or run via `npx`,
-// where the package-relative path resolves inside node_modules. Variables
-// already present in process.env always win: dotenv never overwrites them, and
-// MCP clients inject their configuration exactly that way. `quiet` suppresses
-// dotenv's stdout banner, which would otherwise corrupt the stdio MCP JSON-RPC
-// stream.
-const moduleDir = path.dirname(fileURLToPath(import.meta.url));
-const ENV_FILE_CANDIDATES = [
-  process.env.GOOGLE_ADS_MCP_ENV,
-  path.join(os.homedir(), '.config', 'google-ads-mcp', '.env'),
-  // Project root is two levels up from src/config (or dist/config).
-  path.resolve(moduleDir, '../../.env'),
-];
-for (const candidate of ENV_FILE_CANDIDATES) {
-  if (candidate && fs.existsSync(candidate)) {
-    dotenv.config({ path: candidate, quiet: true });
-    break;
-  }
-}
+loadEnvironment();
 
 const envSchema = z.object({
   // Optional: only multi-tenant mode (HTTP transport, orgs, grants, audit) needs

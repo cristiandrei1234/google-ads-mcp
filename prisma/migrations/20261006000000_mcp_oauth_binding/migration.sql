@@ -1,0 +1,3 @@
+ALTER TABLE "User" ADD COLUMN "mcpAuthVersion" INTEGER NOT NULL DEFAULT 0;
+ALTER TABLE "OauthAccessToken" ADD COLUMN "organizationId" TEXT;
+ALTER TABLE "OauthAccessToken" ADD COLUMN "authVersion" INTEGER NOT NULL DEFAULT -1;

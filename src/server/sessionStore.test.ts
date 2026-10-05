@@ -6,6 +6,13 @@ function fakeTransport(sessionId?: string) {
 }
 
 describe("SessionStore", () => {
+  it("does not let the same user reuse a transport in another organization", () => {
+    const store = new SessionStore(() => 0);
+    store.add("s", fakeTransport(), "u", "org-a");
+    expect(store.getOwned("s", "u", "org-a")).not.toBeNull();
+    expect(store.getOwned("s", "u", "org-b")).toBeNull();
+    expect(store.getOwned("s", "u", null)).toBeNull();
+  });
   it("adds, counts, and resolves owned sessions", () => {
     let clock = 1000;
     const store = new SessionStore(() => clock);

@@ -136,6 +136,38 @@ args = ["-y", "@automwise/google-ads-mcp"]
 env = { GOOGLE_ADS_MCP_ENV = "/home/you/.config/google-ads-mcp/.env" }
 ```
 
+### Local authentication expires after about seven days
+
+Local stdio uses a **Google refresh token**, not the HTTP server's MCP OAuth
+session. The Google Ads SDK already refreshes access automatically: REST calls
+cache access tokens for 50 minutes, before their usual one-hour expiry; gRPC
+uses Google Auth's refresh client. There is no need to log in every hour or keep
+a background timer running.
+
+For an **External** OAuth app with publishing status **Testing**, Google Ads
+refresh tokens expire after **seven days**. Access-token refresh does not extend
+this lifetime. Check **Google Cloud → Google Auth Platform → Audience →
+Publishing status** for the project owning your OAuth client. If it is Testing:
+
+1. Switch the app to **In production**, completing any Google verification
+   required for your app/scopes. This is a Google Cloud setting, not an MCP code
+   setting.
+2. Run `npm run generate-token` once to obtain a new refresh token. Set
+   `GOOGLE_ADS_MCP_ENV` to the same path used by your MCP launcher if applicable.
+   The script reads/writes the same selected configuration file as the server,
+   requests offline consent, and saves the token without printing it.
+3. Remove or update any `GOOGLE_ADS_REFRESH_TOKEN` set directly in Claude/Codex's
+   launcher `env` block: injected variables override the file. Restart the MCP
+   client to load the new token.
+4. Run `npm run check-token` with the same environment to verify that Google
+   accepts the refresh token without opening a browser. Failure returns a
+   nonzero exit code and never prints tokens or OAuth request bodies.
+
+A seven-day interval is a clue, not proof of Testing mode. Google may also revoke
+refresh tokens because of revoked consent, account/session policies, inactivity,
+or issuing too many tokens. Even production refresh tokens are not guaranteed
+permanent. See [Google's refresh-token expiration rules](https://developers.google.com/identity/protocols/oauth2#expiration).
+
 ### Keep the secrets out of your repository
 
 The obvious way to configure an MCP server is to paste the credentials into the
@@ -144,9 +176,10 @@ client's `env` block. Do not do that in a **project-scoped** config
 secret and a refresh token together are full account access, and that file gets
 committed.
 
-The server reads a `.env` from the first location that exists:
+When `$GOOGLE_ADS_MCP_ENV` is set, the server and token utilities use that exact
+file. Otherwise they use the first existing default location:
 
-1. `$GOOGLE_ADS_MCP_ENV`
+1. `$GOOGLE_ADS_MCP_ENV` (explicit override, even when creating a new file)
 2. `~/.config/google-ads-mcp/.env`
 3. the package's own directory (a local clone)
 
@@ -226,7 +259,29 @@ The server speaks **Streamable HTTP** at `POST/GET/DELETE /mcp`, gated by auth.
    `Accept: application/json, text/event-stream`.
 
 Claude-style remote MCP connectors discover authorization via the Better Auth
-`mcp` plugin's OAuth/OIDC metadata.
+`mcp` plugin's OAuth/OIDC metadata. `/mcp` returns a `WWW-Authenticate` challenge
+pointing to `/.well-known/oauth-protected-resource/mcp`; authorization-server
+metadata is available at `/.well-known/oauth-authorization-server/api/auth`.
+Clients should request `openid offline_access` with PKCE and use
+`/api/auth/mcp/token` with `grant_type=refresh_token` to renew without a browser.
+Access tokens last one hour; refresh tokens rotate on use and last thirty days
+from issuance. A client must retain the replacement refresh token.
+
+OAuth authorization is pinned to the organization selected when connecting,
+and every request/refresh checks current membership, bans and session
+revocation. Changing the dashboard organization does not move an existing MCP
+connection. A transport expires after inactivity; clients may initialize a new
+transport using a still-valid OAuth token without signing in again.
+
+**Upgrade:** apply Prisma migrations before starting the updated HTTP server
+(`npx prisma migrate deploy`). Existing MCP OAuth tokens lack an organization
+binding and require one reconnection; dashboard login tokens still work.
+`/admin/revoke-sessions` revokes both login sessions and MCP OAuth access/refresh
+tokens. This HTTP change does not extend Google's local refresh-token lifetime.
+
+See [the server release runbook](docs/SERVER-OAUTH-RELEASE.md) for deployment,
+real-client verification and rollback, and [the plugin plan](docs/PLUGIN-PLAN.md)
+for the proposed installable Google Ads workflows.
 
 ### Enterprise SSO (SAML 2.0 / OIDC)
 
@@ -429,7 +484,7 @@ npm run http:dev                               # http://localhost:3000
 ```
 
 Generate a single-operator refresh token with the loopback OAuth flow (it opens a
-consent URL and writes `GOOGLE_ADS_REFRESH_TOKEN` to `.env`):
+consent URL and writes `GOOGLE_ADS_REFRESH_TOKEN` to the selected MCP config file):
 
 ```bash
 npm run generate-token
@@ -456,7 +511,7 @@ npm run generate-token
 ## Tests
 
 ```bash
-npm test                 # vitest unit suite — 1009 tests, offline (mocks)
+npm test                 # vitest unit suite — 1053 tests, offline (mocks)
 npm run coverage         # same + coverage; gated at 100% (statements/branches/funcs/lines)
 npm run typecheck        # tsc --noEmit
 ```
@@ -473,11 +528,13 @@ npx tsx scripts/smoke-db.ts        # repositories + encryption (AAD/v2) round-tr
 npx tsx scripts/smoke-auth.ts      # Better Auth sign-up via the Prisma adapter
 npx tsx scripts/smoke-identity.ts  # grant-gated access + anti-impersonation
 npx tsx scripts/smoke-http.ts      # HTTP auth gate, tools/call, audit (server must run)
+npx tsx scripts/smoke-connect.ts   # account connection/onboarding (server must run)
+npx tsx scripts/smoke-oauth.ts     # PKCE, expiry/refresh, replay denial and revocation
 ```
 
 CI (`.github/workflows/ci.yml`) runs a dependency audit (fail on high/critical),
 boots Postgres and runs migrations, typechecks, runs `npm run coverage` (100%
-gate), builds, then runs all four smoke suites. Dependabot opens weekly update
+gate), builds, then runs all six smoke suites. Dependabot opens weekly update
 PRs.
 
 `npm audit` currently reports **zero** advisories at any severity. Two of them are

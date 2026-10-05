@@ -44,6 +44,7 @@ model User {
   banned        Boolean? @default(false)
   banReason     String?
   banExpires    DateTime?
+  mcpAuthVersion Int @default(0)
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
 
@@ -199,6 +200,8 @@ model OauthAccessToken {
   clientId              String?
   userId                String?
   scopes                String?
+  organizationId        String?
+  authVersion           Int @default(-1)
   createdAt             DateTime  @default(now())
   updatedAt             DateTime  @updatedAt
 }

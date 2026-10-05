@@ -82,10 +82,11 @@ jobs:
         run: |
           node dist/server/http.js &
           SERVER_PID=$!
+          trap 'kill "$SERVER_PID" 2>/dev/null || true' EXIT
           for i in $(seq 1 30); do
             if curl -sf http://localhost:3939/healthz >/dev/null; then echo "server ready"; break; fi
             sleep 1
           done
           npx tsx scripts/smoke-http.ts
           npx tsx scripts/smoke-connect.ts
-          kill $SERVER_PID
+          npx tsx scripts/smoke-oauth.ts

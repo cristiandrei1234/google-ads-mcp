@@ -7,6 +7,7 @@ import { toNodeHandler, fromNodeHeaders } from "better-auth/node";
 import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
 import { isInitializeRequest } from "@modelcontextprotocol/sdk/types.js";
 import { auth } from "../auth/betterAuth.js";
+import { resolveMcpContext, mcpResourceMetadata, mcpAuthChallenge } from "../auth/mcpContext.js";
 import { createMcpServer } from "../createServer.js";
 import { runWithIdentity, type AuthContext } from "../auth/identityContext.js";
 import {
@@ -79,7 +80,7 @@ app.use(
     origin: allowedOrigins,
     credentials: true,
     allowedHeaders: ["Content-Type", "Authorization", "mcp-session-id", "mcp-protocol-version"],
-    exposedHeaders: ["mcp-session-id", "x-request-id"],
+    exposedHeaders: ["mcp-session-id", "x-request-id", "WWW-Authenticate"],
   })
 );
 
@@ -101,6 +102,12 @@ app.use((req: Request, res: Response, next: NextFunction) => {
 // Better Auth routes (sign-in/up, OAuth, OIDC/MCP discovery). Mounted BEFORE
 // express.json so Better Auth can read the raw request body itself.
 app.all("/api/auth/*splat", toNodeHandler(auth));
+app.get(["/.well-known/oauth-protected-resource", "/.well-known/oauth-protected-resource/mcp"], (_req, res) => {
+  res.json(mcpResourceMetadata(config.BETTER_AUTH_URL!));
+});
+app.get(["/.well-known/oauth-authorization-server", "/.well-known/oauth-authorization-server/api/auth"], async (_req, res) => {
+  res.json(await auth.api.getMcpOAuthConfig());
+});
 
 app.use(express.json({ limit: "1mb" }));
 
@@ -169,7 +176,11 @@ app.post("/admin/revoke-sessions", async (req: Request, res: Response) => {
     res.status(404).json({ error: "not_found", message: "User is not a member of your organization." });
     return;
   }
-  const { count } = await getPrisma().session.deleteMany({ where: { userId: targetUserId } });
+  const [, { count }] = await getPrisma().$transaction([
+    getPrisma().user.update({ where: { id: targetUserId }, data: { mcpAuthVersion: { increment: 1 } } }),
+    getPrisma().session.deleteMany({ where: { userId: targetUserId } }),
+    getPrisma().oauthAccessToken.deleteMany({ where: { userId: targetUserId } }),
+  ]);
   const closedMcp = await sessions.closeForUser(targetUserId);
   logger.info(
     { actor: authCtx.userId, targetUserId, authSessions: count, mcpSessions: closedMcp },
@@ -391,14 +402,15 @@ const mcpLimiter = rateLimit({
 app.use("/mcp", mcpLimiter);
 
 app.post("/mcp", async (req: Request, res: Response) => {
-  const authCtx = await resolveAuthContext(req);
+  const authCtx = await resolveMcpContext(fromNodeHeaders(req.headers), res.getHeader("x-request-id") as string);
   if (!authCtx) {
-    res.status(401).json({ error: "unauthorized", message: "Sign in via /api/auth first." });
+    res.setHeader("WWW-Authenticate", mcpAuthChallenge(config.BETTER_AUTH_URL!));
+    res.status(401).json({ error: "unauthorized", message: "Authorize the MCP client using the advertised OAuth metadata." });
     return;
   }
 
   const sessionId = req.headers["mcp-session-id"] as string | undefined;
-  let transport = sessions.getOwned(sessionId, authCtx.userId)?.transport;
+  let transport = sessions.getOwned(sessionId, authCtx.userId, authCtx.orgId)?.transport;
 
   if (!transport) {
     // A session id that exists but isn't ours must not fall through to "create".
@@ -414,7 +426,7 @@ app.post("/mcp", async (req: Request, res: Response) => {
     const newTransport = new StreamableHTTPServerTransport({
       sessionIdGenerator: () => randomUUID(),
       onsessioninitialized: (sid) => {
-        sessions.add(sid, newTransport, ownerUserId);
+        sessions.add(sid, newTransport, ownerUserId, authCtx.orgId);
         logger.info({ sessionId: sid, userId: ownerUserId }, "MCP session initialized");
       },
     });
@@ -434,13 +446,14 @@ app.post("/mcp", async (req: Request, res: Response) => {
 });
 
 async function handleSessionRequest(req: Request, res: Response) {
-  const authCtx = await resolveAuthContext(req);
+  const authCtx = await resolveMcpContext(fromNodeHeaders(req.headers), res.getHeader("x-request-id") as string);
   if (!authCtx) {
+    res.setHeader("WWW-Authenticate", mcpAuthChallenge(config.BETTER_AUTH_URL!));
     res.status(401).json({ error: "unauthorized" });
     return;
   }
   const sessionId = req.headers["mcp-session-id"] as string | undefined;
-  const session = sessions.getOwned(sessionId, authCtx.userId);
+  const session = sessions.getOwned(sessionId, authCtx.userId, authCtx.orgId);
   if (!session) {
     res.status(404).json({ error: "not_found", message: "Unknown or unauthorized mcp-session-id." });
     return;

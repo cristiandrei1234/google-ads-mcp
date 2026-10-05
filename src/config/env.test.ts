@@ -250,6 +250,13 @@ describe(".env resolution cascade", () => {
     expect(quiet).toBe(true); // never print to stdout: it is the JSON-RPC stream
   });
 
+  it("does not silently fall back when an explicit file is missing", async () => {
+    const override = path.join(os.tmpdir(), "missing-mcp.env");
+    existsSync.mockImplementation((candidate: string) => candidate !== override);
+    await loadEnv({ GOOGLE_ADS_MCP_ENV: override });
+    expect(dotenvConfig).not.toHaveBeenCalled();
+  });
+
   it("loads no file when none of the candidates exist", async () => {
     await loadEnv();
     expect(dotenvConfig).not.toHaveBeenCalled();
